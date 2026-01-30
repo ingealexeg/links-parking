@@ -136,9 +136,10 @@
 
         function goJ4() {
             // Llama a la app del fabricante
-            window.location.href = "j4pay://v1/pay?info=" + rawData;
+            window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
         }
     </script>
 </body>
 
 </html>
+
