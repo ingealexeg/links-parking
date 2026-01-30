@@ -30,75 +30,62 @@
     </div>
 
 <script>
-    const CONFIG = { 
-        baseUrl: "https://eu-sandbox.j-pass.com", 
-        instId: "3569036549", 
-        fee: 0.25 
-    };
-
+    const CONFIG = { fee: 0.25 };
     const params = new URLSearchParams(window.location.search);
     const ticket = params.get('ticket') || 'SIN-DATA';
     let montoTotal = 0;
 
-    async function init() {
+    function init() {
         if (ticket === 'SIN-DATA') {
             document.getElementById('ticketDisplay').innerText = "TICKET NO DETECTADO";
             return;
         }
 
-        // AllOrigins funciona como un túnel que engaña al servidor de J-Pass
-        const targetUrl = `${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${ticket}/cost`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+        // Mostramos el ID del ticket y habilitamos la entrada manual
+        document.getElementById('statusText').innerText = "Por seguridad, ingrese el monto mostrado en la pantalla del parqueo";
+        
+        document.getElementById('ticketDisplay').innerHTML = `
+            <div style="font-size:0.8rem; color:#888; margin-bottom:10px;">TICKET: ${ticket}</div>
+            <div style="margin-bottom:10px;">
+                <label style="font-size:0.9rem; font-weight:bold;">Monto a pagar (Q):</label><br>
+                <input type="number" id="inputMonto" placeholder="0.00" step="0.01" 
+                    style="width:80%; padding:10px; font-size:1.2rem; border-radius:10px; border:2px solid var(--tas-red); text-align:center; margin-top:5px;">
+            </div>
+            <div id="desglose" style="display:none; font-size:0.8rem; background:#fff; padding:10px; border-radius:5px;">
+                <div style="display:flex; justify-content:space-between;"><span>Servicio Digital:</span> <span>Q${CONFIG.fee.toFixed(2)}</span></div>
+                <div style="display:flex; justify-content:space-between; font-weight:bold; color:red; margin-top:5px;">
+                    <span>TOTAL A PAGAR:</span> <span id="totalTxt">Q0.00</span>
+                </div>
+            </div>
+        `;
 
-        try {
-            const response = await fetch(proxyUrl);
-            const wrapper = await response.json();
-            
-            // AllOrigins guarda la respuesta real dentro de una propiedad llamada 'contents'
-            // Tenemos que convertir ese texto a un objeto JSON real
-            const data = JSON.parse(wrapper.contents); 
+        // Escuchar cambios en el input para actualizar el botón
+        document.getElementById('inputMonto').addEventListener('input', calcularTotal);
+    }
 
-            if (data.status === "ok" && data.item) {
-                const base = data.item.cost.value;
-                montoTotal = base + CONFIG.fee;
-                
-                document.getElementById('ticketDisplay').innerHTML = `
-                    <div style="font-size:0.8rem; color:#888; margin-bottom:5px;">ID: ${ticket.substring(0,10)}...</div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span>Tarifa Parqueo:</span> <span>Q${base.toFixed(2)}</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#888;">
-                        <span>Servicio Digital (Yappy):</span> <span>Q${CONFIG.fee.toFixed(2)}</span>
-                    </div>
-                    <hr style="border:0; border-top:1px dashed #ccc; margin:10px 0;">
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--tas-red); font-size:1.3rem;">
-                        <span>TOTAL:</span> <span>Q${montoTotal.toFixed(2)}</span>
-                    </div>
-                `;
-                
-                // Habilitamos el botón de Yappy solo si tenemos el monto
-                document.getElementById('btnYappy').style.opacity = "1";
-                document.getElementById('btnYappy').disabled = false;
-                document.getElementById('statusText').innerText = "Monto listo para pago";
-            }
-        } catch (e) {
-            console.error("Error crítico:", e);
-            document.getElementById('statusText').innerText = "Error de conexión con el servidor central";
-            document.getElementById('ticketDisplay').innerHTML = `
-                <div style="color:#e31e24; font-weight:bold;">No se pudo obtener el monto</div>
-                <div style="font-size:0.8rem; margin-top:5px;">Ticket: ${ticket}</div>
-            `;
+    function calcularTotal() {
+        const montoBase = parseFloat(document.getElementById('inputMonto').value);
+        if (montoBase > 0) {
+            montoTotal = montoBase + CONFIG.fee;
+            document.getElementById('totalTxt').innerText = "Q" + montoTotal.toFixed(2);
+            document.getElementById('desglose').style.display = "block";
+            document.getElementById('btnYappy').disabled = false;
+        } else {
+            document.getElementById('btnYappy').disabled = true;
+            document.getElementById('desglose').style.display = "none";
         }
     }
 
-    function goYappy() { 
-        if(montoTotal > 0) {
-            window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${ticket}`; 
+    function goYappy() {
+        if (montoTotal > 0) {
+            // Ahora mandamos el monto que el usuario ingresó + tu fee
+            window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${ticket}`;
         }
     }
 
-    function goJ4() { 
-        window.location.href = `${CONFIG.baseUrl}/#/user/external-ticket?installationCode=${CONFIG.instId}&identifier=${ticket}`; 
+    function goJ4() {
+        // Opción de reserva por si el usuario prefiere el método original
+        window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${ticket}`;
     }
 
     init();
