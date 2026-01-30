@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>TAS | Debug Data</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #222; color: #0f0; }
+        .data-card { background: #000; border: 1px solid #0f0; padding: 20px; border-radius: 10px; }
+        .label { color: #888; font-size: 0.8rem; }
+        .value { font-size: 1.5rem; margin-bottom: 20px; color: #fff; font-family: monospace; }
+        .yappy-header { background: #004581; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="yappy-header">
+        <img src="yappy_logo.png" style="height: 40px;" alt="Logo Yappy">
+    </div>
+
+    <div class="data-card">
+        <div class="label">RAW DATA (Ticket ID):</div>
+        <div id="debug-raw" class="value">Esperando...</div>
+
+        <div class="label">MONTO RECIBIDO DEL SERVIDOR:</div>
+        <div id="debug-monto" class="value">Consultando...</div>
+
+        <div class="label">RESPONSE JSON COMPLETO:</div>
+        <pre id="debug-json" style="font-size: 10px; color: #aaa; overflow-x: auto;"></pre>
+    </div>
+
+    <script>
+        const CONFIG = {
+            baseUrl: "https://eu-sandbox.j-pass.com",
+            instId: "3569036549"
+        };
+
+        const params = new URLSearchParams(window.location.search);
+        const ticket = params.get('ticket') || 'NO-DETECTADO';
+        document.getElementById('debug-raw').innerText = ticket;
+
+        async function testData() {
+            try {
+                const url = `${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${ticket}/cost`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                // Mostramos el JSON crudo para ver TODO lo que manda el servidor
+                document.getElementById('debug-json').innerText = JSON.stringify(data, null, 2);
+
+                if (data.status === "ok") {
+                    document.getElementById('debug-monto').innerText = "Q" + data.item.cost.value;
+                } else {
+                    document.getElementById('debug-monto').innerText = "ERROR: " + data.status;
+                }
+            } catch (e) {
+                document.getElementById('debug-monto').innerText = "FALLO DE CONEXIÓN (Posible CORS)";
+                document.getElementById('debug-json').innerText = e.message;
+            }
+        }
+
+        if (ticket !== 'NO-DETECTADO') testData();
+    </script>
+</body>
+</html>
