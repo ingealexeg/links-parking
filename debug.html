@@ -40,21 +40,24 @@
 
         async function testData() {
             try {
-                const url = `${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${ticket}/cost`;
-                const res = await fetch(url);
+            // Este es el túnel que saltará el error de CORS
+                const proxy = "https://corsproxy.io/?"; 
+                const targetUrl = `${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${ticket}/cost`;
+        
+            // Ahora la petición va a través del túnel
+                const res = await fetch(proxy + encodeURIComponent(targetUrl));
                 const data = await res.json();
 
-                // Mostramos el JSON crudo para ver TODO lo que manda el servidor
                 document.getElementById('debug-json').innerText = JSON.stringify(data, null, 2);
 
                 if (data.status === "ok") {
                     document.getElementById('debug-monto').innerText = "Q" + data.item.cost.value;
                 } else {
-                    document.getElementById('debug-monto').innerText = "ERROR: " + data.status;
+                    document.getElementById('debug-monto').innerText = "Respuesta del servidor: " + data.status;
                 }
             } catch (e) {
-                document.getElementById('debug-monto').innerText = "FALLO DE CONEXIÓN (Posible CORS)";
-                document.getElementById('debug-json').innerText = e.message;
+                document.getElementById('debug-monto').innerText = "ERROR DE PROXY";
+                document.getElementById('debug-json').innerText = "No se pudo conectar ni por el túnel: " + e.message;
             }
         }
 
