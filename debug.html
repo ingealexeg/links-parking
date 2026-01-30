@@ -2,66 +2,87 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TAS | Debug Data</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAS | Gestión de Pagos</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #222; color: #0f0; }
-        .data-card { background: #000; border: 1px solid #0f0; padding: 20px; border-radius: 10px; }
-        .label { color: #888; font-size: 0.8rem; }
-        .value { font-size: 1.5rem; margin-bottom: 20px; color: #fff; font-family: monospace; }
-        .yappy-header { background: #004581; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 20px; }
+        :root { --tas-red: #e31e24; --tas-dark: #231f20; --tas-bg: #f4f4f4; --white: #ffffff; --yappy-blue: #004581; --j4pay-green: #80B256; }
+        body { font-family: 'Montserrat', sans-serif; background-color: var(--tas-bg); margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .navbar { background-color: var(--tas-dark); width: 100%; padding: 15px 0; text-align: center; border-bottom: 4px solid var(--tas-red); margin-bottom: 40px; }
+        .logo { max-height: 50px; }
+        .container { background: var(--white); width: 85%; max-width: 400px; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
+        .ticket-box { background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 5px solid var(--tas-red); font-family: monospace; text-align: left; }
+        .btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 12px; margin: 15px 0; border-radius: 30px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: 0.3s; text-transform: uppercase; border: none; }
+        .btn-yappy { background: white; color: var(--yappy-blue); border: 2px solid var(--yappy-blue); }
+        .btn-j4pay { background: var(--j4pay-green); color: white; border: 2px solid #10852d; }
+        .btn img { height: 30px; margin-right: 15px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
-
-    <div class="yappy-header">
-        <img src="yappy_logo.png" style="height: 40px;" alt="Logo Yappy">
-    </div>
-
-    <div class="data-card">
-        <div class="label">RAW DATA (Ticket ID):</div>
-        <div id="debug-raw" class="value">Esperando...</div>
-
-        <div class="label">MONTO RECIBIDO DEL SERVIDOR:</div>
-        <div id="debug-monto" class="value">Consultando...</div>
-
-        <div class="label">RESPONSE JSON COMPLETO:</div>
-        <pre id="debug-json" style="font-size: 10px; color: #aaa; overflow-x: auto;"></pre>
+    <div class="navbar"><img src="logo_tas_2025_blanco-768x349.png" class="logo"></div>
+    <div class="container">
+        <h1>Pago de Ticket</h1>
+        <p id="statusText">Cargando datos del servidor...</p>
+        <div id="ticketDisplay" class="ticket-box">Consultando monto...</div>
+        <button id="btnYappy" class="btn btn-yappy" onclick="goYappy()" disabled><img src="yappy_logo.png"> Pagar con Yappy</button>
+        <button id="btnJ4" class="btn btn-j4pay" onclick="goJ4()"><img src="j4pay_logo.png"> Pagar con J4Pay</button>
     </div>
 
     <script>
-        const CONFIG = {
-            baseUrl: "https://eu-sandbox.j-pass.com",
-            instId: "3569036549"
-        };
-
+        const CONFIG = { baseUrl: "https://eu-sandbox.j-pass.com", instId: "3569036549", fee: 0.25 };
         const params = new URLSearchParams(window.location.search);
-        const ticket = params.get('ticket') || 'NO-DETECTADO';
-        document.getElementById('debug-raw').innerText = ticket;
+        const ticket = params.get('ticket') || 'SIN-DATA';
+        let montoTotal = 0;
 
-        async function testData() {
+        async function init() {
+            if (ticket === 'SIN-DATA') {
+                document.getElementById('ticketDisplay').innerText = "Ticket no detectado";
+                return;
+            }
+            
+            // Intentamos obtener el costo con un proxy diferente (reintento automático)
+            const proxyList = [
+                "https://api.allorigins.win/get?url=", // Proxy 1 (más estable)
+                "https://thingproxy.freeboard.io/fetch/" // Proxy 2 (respaldo)
+            ];
+
             try {
-            // Este es el túnel que saltará el error de CORS
-                const proxy = "https://corsproxy.io/?"; 
                 const targetUrl = `${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${ticket}/cost`;
-        
-            // Ahora la petición va a través del túnel
-                const res = await fetch(proxy + encodeURIComponent(targetUrl));
-                const data = await res.json();
-
-                document.getElementById('debug-json').innerText = JSON.stringify(data, null, 2);
+                const response = await fetch(proxyList[0] + encodeURIComponent(targetUrl));
+                const wrapper = await response.json();
+                const data = JSON.parse(wrapper.contents); // AllOrigins devuelve los datos en 'contents'
 
                 if (data.status === "ok") {
-                    document.getElementById('debug-monto').innerText = "Q" + data.item.cost.value;
-                } else {
-                    document.getElementById('debug-monto').innerText = "Respuesta del servidor: " + data.status;
+                    const base = data.item.cost.value;
+                    montoTotal = base + CONFIG.fee;
+                    
+                    document.getElementById('ticketDisplay').innerHTML = `
+                        <div style="font-size:0.8rem">TICKET: ${ticket.substring(0,8)}...</div>
+                        <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                            <span>Parqueo:</span> <span>Q${base.toFixed(2)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#888;">
+                            <span>Servicio:</span> <span>Q${CONFIG.fee.toFixed(2)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin-top:10px; color:red; font-size:1.2rem;">
+                            <span>TOTAL:</span> <span>Q${montoTotal.toFixed(2)}</span>
+                        </div>
+                    `;
+                    document.getElementById('btnYappy').disabled = false;
+                    document.getElementById('statusText').innerText = "Monto cargado correctamente";
                 }
             } catch (e) {
-                document.getElementById('debug-monto').innerText = "ERROR DE PROXY";
-                document.getElementById('debug-json').innerText = "No se pudo conectar ni por el túnel: " + e.message;
+                // Si falla el monto, al menos dejamos el botón de J4Pay vivo y mostramos el ID
+                document.getElementById('ticketDisplay').innerText = "TICKET ID: " + ticket;
+                document.getElementById('statusText').innerText = "Monto no disponible (Pago en J4Pay)";
             }
         }
 
-        if (ticket !== 'NO-DETECTADO') testData();
+        function goYappy() { window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${ticket}`; }
+        function goJ4() { window.location.href = `${CONFIG.baseUrl}/#/user/external-ticket?installationCode=${CONFIG.instId}&identifier=${ticket}`; }
+
+        init();
     </script>
 </body>
 </html>
