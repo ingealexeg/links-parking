@@ -11,8 +11,8 @@
             --tas-dark: #231f20;
             --tas-bg: #f4f4f4;
             --white: #ffffff;
-            --yappi-blue: #004581;
-            --j4pay-green: #80B256;
+            --yappi-blue: #004581; /* Color del texto de Yappi */
+            --j4pay-green: #80B256; /* El verde de tu logo J4Pay */
         }
 
         body {
@@ -46,6 +46,8 @@
             text-align: center;
         }
 
+        h1 { color: var(--tas-dark); font-size: 1.4rem; margin-bottom: 10px; text-transform: uppercase; }
+
         .ticket-box {
             background: #eee;
             padding: 15px;
@@ -55,40 +57,50 @@
             font-family: monospace;
             font-weight: bold;
             color: #555;
-            text-align: left;
         }
 
         .btn {
-            display: flex;
+            display: flex; /* Cambiado para alinear logo y texto */
             align-items: center;
             justify-content: center;
             width: 100%;
-            padding: 15px;
+            padding: 12px;
             margin: 15px 0;
+            border: none;
             border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 700;
+            text-decoration: none;
             cursor: pointer;
             transition: 0.3s;
-            border: none;
+            text-transform: uppercase;
         }
 
+        /* Ajuste de colores por los logos con fondo sólido */
         .btn-yappi {
             background-color: #ffffff; 
+            color: var(--yappi-blue);
             border: 2px solid var(--yappi-blue);
         }
 
         .btn-j4pay {
             background-color: var(--j4pay-green);
+            color: white;
             border: 2px solid #10852d;
         }
 
+        /* NUEVO: Boton Wompi fondo blanco borde negro */
         .btn-wompi {
             background-color: #ffffff;
+            color: #000000;
             border: 2px solid #000000;
         }
 
+        /* Estilo para los logos dentro de los botones */
         .btn img {
-            height: 35px; /* Logos un poco más grandes al no haber texto */
-            object-fit: contain;
+            height: 30px; /* Tamaño ideal para que no deforme el botón */
+            margin-right: 15px;
+            border-radius: 5px;
         }
 
         .btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
@@ -103,20 +115,21 @@
     </div>
 
     <div class="container">
-        <h1 style="font-size: 1.2rem; color: var(--tas-dark);">PAGO DE TICKET</h1>
+        <h1>Pago de Ticket</h1>
+        <p style="color: #666;">Seleccione su método de pago</p>
         
-        <div id="ticketDisplay" class="ticket-box">Consultando...</div>
+        <div id="ticketDisplay" class="ticket-box">Escaneando...</div>
 
-        <button id="btnYappy" class="btn btn-yappi" onclick="goYappy()">
-            <img src="yappy_logo.png" alt="Yappi">
+        <button class="btn btn-yappi" onclick="goYappi()">
+            <img src="yappy_logo.png" alt="Yappi">  
         </button>
 
-        <button id="btnJ4" class="btn btn-j4pay" onclick="goJ4()">
-            <img src="j4pay_logo.png" alt="J4Pay">
+        <button class="btn btn-j4pay" onclick="goJ4()">
+            <img src="j4pay_logo.png" alt="J4Pay">  
         </button>
 
-        <button id="btnWompi" class="btn btn-wompi" onclick="goWompi()">
-            <img src="wompi_logo.png" alt="Wompi">
+        <button class="btn btn-wompi" onclick="goWompi()">
+            <img src="wompi_logo.png" alt="Wompi">  
         </button>
     </div>
 
@@ -127,12 +140,10 @@
     <script>
         const params = new URLSearchParams(window.location.search);
         const rawData = params.get('ticket') || 'SIN-DATA';
-        let montoTotal = 0; 
-
         document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
-        function goYappy() {
-            window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal}&ref=${rawData}`;
+        function goYappi() {
+            window.location.href = "https://pagos.yappy.com/checkout?ref=" + rawData;
         }
 
         function goJ4() {
@@ -140,7 +151,8 @@
         }
 
         function goWompi() {
-            window.location.href = `https://pagos.wompi.com.gt/checkout?amount=${montoTotal}&ref=${rawData}`;
+            // Aquí irá el link de Wompi cuando lo tengamos
+            window.location.href = "https://pagos.wompi.com.gt/checkout?ref=" + rawData;
         }
     </script>
 </body>
