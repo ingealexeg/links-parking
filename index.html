@@ -46,8 +46,6 @@
             text-align: center;
         }
 
-        h1 { color: var(--tas-dark); font-size: 1.4rem; margin-bottom: 10px; text-transform: uppercase; }
-
         .ticket-box {
             background: #eee;
             padding: 15px;
@@ -65,44 +63,35 @@
             align-items: center;
             justify-content: center;
             width: 100%;
-            padding: 12px;
+            padding: 15px;
             margin: 15px 0;
             border-radius: 30px;
-            font-size: 1rem;
-            font-weight: 700;
             cursor: pointer;
             transition: 0.3s;
-            text-transform: uppercase;
             border: none;
         }
 
         .btn-yappi {
             background-color: #ffffff; 
-            color: var(--yappi-blue);
             border: 2px solid var(--yappi-blue);
         }
 
         .btn-j4pay {
             background-color: var(--j4pay-green);
-            color: white;
             border: 2px solid #10852d;
         }
 
-        /* Estilo Wompi: Fondo blanco, borde negro */
         .btn-wompi {
             background-color: #ffffff;
-            color: #000000;
             border: 2px solid #000000;
         }
 
         .btn img {
-            height: 30px;
-            margin-right: 15px;
-            border-radius: 5px;
+            height: 35px; /* Logos un poco más grandes al no haber texto */
+            object-fit: contain;
         }
 
         .btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         footer { margin-top: auto; padding: 20px; font-size: 0.8rem; color: #888; }
     </style>
@@ -114,21 +103,20 @@
     </div>
 
     <div class="container">
-        <h1>Pago de Ticket</h1>
-        <p id="statusLabel" style="color: #666;">Seleccione su método de pago</p>
+        <h1 style="font-size: 1.2rem; color: var(--tas-dark);">PAGO DE TICKET</h1>
         
-        <div id="ticketDisplay" class="ticket-box">Consultando monto...</div>
+        <div id="ticketDisplay" class="ticket-box">Consultando...</div>
 
-        <button id="btnYappi" class="btn btn-yappi" onclick="goYappi()" disabled>
-            <img src="yappy_logo.png" alt="Yappi"> Pagar con Yappy
+        <button id="btnYappy" class="btn btn-yappi" onclick="goYappy()">
+            <img src="yappy_logo.png" alt="Yappi">
         </button>
 
         <button id="btnJ4" class="btn btn-j4pay" onclick="goJ4()">
-            <img src="j4pay_logo.png" alt="J4Pay"> Pagar con J4Pay
+            <img src="j4pay_logo.png" alt="J4Pay">
         </button>
 
-        <button id="btnWompi" class="btn btn-wompi" onclick="goWompi()" disabled>
-            <img src="wompi_logo.png" alt="Wompi"> Pagar con Wompi
+        <button id="btnWompi" class="btn btn-wompi" onclick="goWompi()">
+            <img src="wompi_logo.png" alt="Wompi">
         </button>
     </div>
 
@@ -139,14 +127,12 @@
     <script>
         const params = new URLSearchParams(window.location.search);
         const rawData = params.get('ticket') || 'SIN-DATA';
-        let montoTotal = 0; // Esta variable se actualizará cuando conectemos el Worker
+        let montoTotal = 0; 
 
         document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
-        function goYappi() {
-            if (montoTotal > 0) {
-                window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${rawData}`;
-            }
+        function goYappy() {
+            window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal}&ref=${rawData}`;
         }
 
         function goJ4() {
@@ -154,10 +140,7 @@
         }
 
         function goWompi() {
-            if (montoTotal > 0) {
-                // Ajusta esta URL según la documentación técnica de Wompi Guatemala
-                window.location.href = `https://pagos.wompi.com.gt/checkout?amount=${montoTotal.toFixed(2)}&ref=${rawData}`;
-            }
+            window.location.href = `https://pagos.wompi.com.gt/checkout?amount=${montoTotal}&ref=${rawData}`;
         }
     </script>
 </body>
