@@ -11,8 +11,8 @@
             --tas-dark: #231f20;
             --tas-bg: #f4f4f4;
             --white: #ffffff;
-            --yappi-blue: #004581; /* Color del texto de Yappi */
-            --j4pay-green: #80B256; /* El verde de tu logo J4Pay */
+            --yappi-blue: #004581;
+            --j4pay-green: #80B256;
         }
 
         body {
@@ -57,26 +57,25 @@
             font-family: monospace;
             font-weight: bold;
             color: #555;
+            text-align: left;
         }
 
         .btn {
-            display: flex; /* Cambiado para alinear logo y texto */
+            display: flex;
             align-items: center;
             justify-content: center;
             width: 100%;
             padding: 12px;
             margin: 15px 0;
-            border: none;
             border-radius: 30px;
             font-size: 1rem;
             font-weight: 700;
-            text-decoration: none;
             cursor: pointer;
             transition: 0.3s;
             text-transform: uppercase;
+            border: none;
         }
 
-        /* Ajuste de colores por los logos con fondo sólido */
         .btn-yappi {
             background-color: #ffffff; 
             color: var(--yappi-blue);
@@ -86,17 +85,24 @@
         .btn-j4pay {
             background-color: var(--j4pay-green);
             color: white;
-			border: 2px solid #10852d
+            border: 2px solid #10852d;
         }
 
-        /* Estilo para los logos dentro de los botones */
+        /* Estilo Wompi: Fondo blanco, borde negro */
+        .btn-wompi {
+            background-color: #ffffff;
+            color: #000000;
+            border: 2px solid #000000;
+        }
+
         .btn img {
-            height: 30px; /* Tamaño ideal para que no deforme el botón */
+            height: 30px;
             margin-right: 15px;
             border-radius: 5px;
         }
 
         .btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         footer { margin-top: auto; padding: 20px; font-size: 0.8rem; color: #888; }
     </style>
@@ -109,16 +115,20 @@
 
     <div class="container">
         <h1>Pago de Ticket</h1>
-        <p style="color: #666;">Seleccione su método de pago</p>
+        <p id="statusLabel" style="color: #666;">Seleccione su método de pago</p>
         
-        <div id="ticketDisplay" class="ticket-box">Escaneando...</div>
+        <div id="ticketDisplay" class="ticket-box">Consultando monto...</div>
 
-        <button class="btn btn-yappi" onclick="goYappi()">
-            <img src="yappy_logo.png" alt="Yappi">  
+        <button id="btnYappi" class="btn btn-yappi" onclick="goYappi()" disabled>
+            <img src="yappy_logo.png" alt="Yappi"> Pagar con Yappy
         </button>
 
-        <button class="btn btn-j4pay" onclick="goJ4()">
-            <img src="j4pay_logo.png" alt="J4Pay">  
+        <button id="btnJ4" class="btn btn-j4pay" onclick="goJ4()">
+            <img src="j4pay_logo.png" alt="J4Pay"> Pagar con J4Pay
+        </button>
+
+        <button id="btnWompi" class="btn btn-wompi" onclick="goWompi()" disabled>
+            <img src="wompi_logo.png" alt="Wompi"> Pagar con Wompi
         </button>
     </div>
 
@@ -129,17 +139,26 @@
     <script>
         const params = new URLSearchParams(window.location.search);
         const rawData = params.get('ticket') || 'SIN-DATA';
+        let montoTotal = 0; // Esta variable se actualizará cuando conectemos el Worker
+
         document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
         function goYappi() {
-            window.location.href = "https://pagos.yappi.com/checkout?ref=" + rawData;
+            if (montoTotal > 0) {
+                window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${rawData}`;
+            }
         }
 
         function goJ4() {
             window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
         }
+
+        function goWompi() {
+            if (montoTotal > 0) {
+                // Ajusta esta URL según la documentación técnica de Wompi Guatemala
+                window.location.href = `https://pagos.wompi.com.gt/checkout?amount=${montoTotal.toFixed(2)}&ref=${rawData}`;
+            }
+        }
     </script>
 </body>
 </html>
-
-
