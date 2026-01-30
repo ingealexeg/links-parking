@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAS | Gestión de Pagos</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --tas-red: #e31e24;    /* El rojo de tu logo */
+            --tas-dark: #231f20;   /* Gris oscuro de la barra superior */
+            --tas-bg: #f4f4f4;     /* Gris muy claro de fondo */
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--tas-bg);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* Cabecera estilo TAS */
+        .navbar {
+            background-color: var(--tas-dark);
+            width: 100%;
+            padding: 15px 0;
+            text-align: center;
+            border-bottom: 4px solid var(--tas-red);
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            max-height: 50px;
+        }
+
+        .container {
+            background: var(--white);
+            width: 85%;
+            max-width: 400px;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--tas-dark);
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .ticket-box {
+            background: #eee;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 5px solid var(--tas-red);
+            font-family: monospace;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            margin: 15px 0;
+            border: none;
+            border-radius: 30px; /* Redondeados como el botón de la web */
+            font-size: 1rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn-yappi {
+            background-color: #5d2de1; /* Color Yappi */
+            color: white;
+        }
+
+        .btn-j4pay {
+            background-color: var(--tas-red);
+            color: white;
+        }
+
+        .btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+        }
+
+        footer {
+            margin-top: auto;
+            padding: 20px;
+            font-size: 0.8rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="navbar">
+        <img src="https://tas-seguridad.com/wp-content/uploads/2021/03/logo-tas-white.png" alt="TAS Logo" class="logo">
+    </div>
+
+    <div class="container">
+        <h1>Pago de Ticket</h1>
+        <p style="color: #666;">Seleccione su método de pago preferido</p>
+        
+        <div id="ticketDisplay" class="ticket-box">Escaneando...</div>
+
+        <button class="btn btn-yappi" onclick="goYappi()">Pagar con Yappi</button>
+        <button class="btn btn-j4pay" onclick="goJ4()">Pagar con J4Pay</button>
+    </div>
+
+    <footer>
+        &copy; 2026 TAS - Tecnología, Acceso & Seguridad
+    </footer>
+
+    <script>
+        // Lógica para capturar la data del QR
+        const params = new URLSearchParams(window.location.search);
+        const rawData = params.get('ticket') || 'SIN-DATA';
+        document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
+
+        function goYappi() {
+            // Reemplaza con tu URL de comercio real
+            window.location.href = "https://pagos.yappi.com/checkout?ref=" + rawData;
+        }
+
+        function goJ4() {
+            // Llama a la app del fabricante
+            window.location.href = "j4pay://v1/pay?info=" + rawData;
+        }
+    </script>
+</body>
+</html>
