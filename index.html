@@ -7,10 +7,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --tas-red: #e31e24;    /* El rojo de tu logo */
-            --tas-dark: #231f20;   /* Gris oscuro de la barra superior */
-            --tas-bg: #f4f4f4;     /* Gris muy claro de fondo */
+            --tas-red: #e31e24;
+            --tas-dark: #231f20;
+            --tas-bg: #f4f4f4;
             --white: #ffffff;
+            --yappi-blue: #004581; /* Color del texto de Yappi */
+            --j4pay-green: #80B256; /* El verde de tu logo J4Pay */
         }
 
         body {
@@ -23,7 +25,6 @@
             min-height: 100vh;
         }
 
-        /* Cabecera estilo TAS */
         .navbar {
             background-color: var(--tas-dark);
             width: 100%;
@@ -33,9 +34,7 @@
             margin-bottom: 40px;
         }
 
-        .logo {
-            max-height: 50px;
-        }
+        .logo { max-height: 50px; }
 
         .container {
             background: var(--white);
@@ -47,12 +46,7 @@
             text-align: center;
         }
 
-        h1 {
-            color: var(--tas-dark);
-            font-size: 1.4rem;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
+        h1 { color: var(--tas-dark); font-size: 1.4rem; margin-bottom: 10px; text-transform: uppercase; }
 
         .ticket-box {
             background: #eee;
@@ -66,12 +60,14 @@
         }
 
         .btn {
-            display: block;
+            display: flex; /* Cambiado para alinear logo y texto */
+            align-items: center;
+            justify-content: center;
             width: 100%;
-            padding: 16px;
+            padding: 12px;
             margin: 15px 0;
             border: none;
-            border-radius: 30px; /* Redondeados como el botón de la web */
+            border-radius: 30px;
             font-size: 1rem;
             font-weight: 700;
             text-decoration: none;
@@ -80,27 +76,29 @@
             text-transform: uppercase;
         }
 
+        /* Ajuste de colores por los logos con fondo sólido */
         .btn-yappi {
-            background-color: #5d2de1; /* Color Yappi */
-            color: white;
+            background-color: #ffffff; 
+            color: var(--yappi-blue);
+            border: 2px solid var(--yappi-blue);
         }
 
         .btn-j4pay {
-            background-color: var(--tas-red);
+            background-color: var(--j4pay-green);
             color: white;
+			border: 2px solid #10852d
         }
 
-        .btn:hover {
-            filter: brightness(1.1);
-            transform: translateY(-2px);
+        /* Estilo para los logos dentro de los botones */
+        .btn img {
+            height: 30px; /* Tamaño ideal para que no deforme el botón */
+            margin-right: 15px;
+            border-radius: 5px;
         }
 
-        footer {
-            margin-top: auto;
-            padding: 20px;
-            font-size: 0.8rem;
-            color: #888;
-        }
+        .btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
+
+        footer { margin-top: auto; padding: 20px; font-size: 0.8rem; color: #888; }
     </style>
 </head>
 <body>
@@ -115,8 +113,13 @@
         
         <div id="ticketDisplay" class="ticket-box">Escaneando...</div>
 
-        <button class="btn btn-yappi" onclick="goYappi()">Pagar con Yappi</button>
-        <button class="btn btn-j4pay" onclick="goJ4()">Pagar con J4Pay</button>
+        <button class="btn btn-yappi" onclick="goYappi()">
+            <img src="yappy_logo.png" alt="Yappi">  
+        </button>
+
+        <button class="btn btn-j4pay" onclick="goJ4()">
+            <img src="j4pay_logo.png" alt="J4Pay">  
+        </button>
     </div>
 
     <footer>
@@ -124,22 +127,17 @@
     </footer>
 
     <script>
-        // Lógica para capturar la data del QR
         const params = new URLSearchParams(window.location.search);
         const rawData = params.get('ticket') || 'SIN-DATA';
         document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
         function goYappi() {
-            // Reemplaza con tu URL de comercio real
             window.location.href = "https://pagos.yappi.com/checkout?ref=" + rawData;
         }
 
         function goJ4() {
-            // Llama a la app del fabricante
             window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
         }
     </script>
 </body>
-
 </html>
-
