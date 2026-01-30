@@ -46,16 +46,16 @@
             return;
         }
 
-        // AllOrigins es un proxy que no pide registro ni pago para GitHub
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(
-            `${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${ticket}/cost`
-        )}`;
+        // AllOrigins funciona como un túnel que engaña al servidor de J-Pass
+        const targetUrl = `${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${ticket}/cost`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
         try {
             const response = await fetch(proxyUrl);
             const wrapper = await response.json();
             
-            // AllOrigins devuelve la respuesta real dentro de 'contents' como texto
+            // AllOrigins guarda la respuesta real dentro de una propiedad llamada 'contents'
+            // Tenemos que convertir ese texto a un objeto JSON real
             const data = JSON.parse(wrapper.contents); 
 
             if (data.status === "ok" && data.item) {
@@ -63,34 +63,40 @@
                 montoTotal = base + CONFIG.fee;
                 
                 document.getElementById('ticketDisplay').innerHTML = `
-                    <div style="font-size:0.8rem; color:#888">TICKET: ${ticket.substring(0,10)}...</div>
-                    <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                    <div style="font-size:0.8rem; color:#888; margin-bottom:5px;">ID: ${ticket.substring(0,10)}...</div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                         <span>Tarifa Parqueo:</span> <span>Q${base.toFixed(2)}</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#888;">
-                        <span>Uso de Servicio:</span> <span>Q${CONFIG.fee.toFixed(2)}</span>
+                        <span>Servicio Digital (Yappy):</span> <span>Q${CONFIG.fee.toFixed(2)}</span>
                     </div>
                     <hr style="border:0; border-top:1px dashed #ccc; margin:10px 0;">
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; color:red; font-size:1.3rem;">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--tas-red); font-size:1.3rem;">
                         <span>TOTAL:</span> <span>Q${montoTotal.toFixed(2)}</span>
                     </div>
                 `;
+                
+                // Habilitamos el botón de Yappy solo si tenemos el monto
+                document.getElementById('btnYappy').style.opacity = "1";
                 document.getElementById('btnYappy').disabled = false;
                 document.getElementById('statusText').innerText = "Monto listo para pago";
             }
         } catch (e) {
-            console.error("Error cargando monto:", e);
+            console.error("Error crítico:", e);
+            document.getElementById('statusText').innerText = "Error de conexión con el servidor central";
             document.getElementById('ticketDisplay').innerHTML = `
-                <div style="color:orange; font-size:0.9rem;">No pudimos conectar con el monto.</div>
-                <div style="font-size:0.8rem; margin-top:5px;">ID: ${ticket}</div>
+                <div style="color:#e31e24; font-weight:bold;">No se pudo obtener el monto</div>
+                <div style="font-size:0.8rem; margin-top:5px;">Ticket: ${ticket}</div>
             `;
-            document.getElementById('statusText').innerText = "Error de conexión (CORS)";
         }
     }
 
     function goYappy() { 
-        window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${ticket}`; 
+        if(montoTotal > 0) {
+            window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${ticket}`; 
+        }
     }
+
     function goJ4() { 
         window.location.href = `${CONFIG.baseUrl}/#/user/external-ticket?installationCode=${CONFIG.instId}&identifier=${ticket}`; 
     }
