@@ -11,8 +11,8 @@
             --tas-dark: #231f20;
             --tas-bg: #f4f4f4;
             --white: #ffffff;
-            --yappi-blue: #004581; /* Color del texto de Yappi */
-            --j4pay-green: #80B256; /* El verde de tu logo J4Pay */
+            --yappy-blue: #004581;
+            --j4pay-green: #80B256;
         }
 
         body {
@@ -49,18 +49,18 @@
         h1 { color: var(--tas-dark); font-size: 1.4rem; margin-bottom: 10px; text-transform: uppercase; }
 
         .ticket-box {
-            background: #eee;
+            background: #f9f9f9;
             padding: 15px;
             border-radius: 5px;
             margin: 20px 0;
             border-left: 5px solid var(--tas-red);
             font-family: monospace;
-            font-weight: bold;
-            color: #555;
+            color: #333;
+            text-align: left;
         }
 
         .btn {
-            display: flex; /* Cambiado para alinear logo y texto */
+            display: flex;
             align-items: center;
             justify-content: center;
             width: 100%;
@@ -70,35 +70,28 @@
             border-radius: 30px;
             font-size: 1rem;
             font-weight: 700;
-            text-decoration: none;
             cursor: pointer;
             transition: 0.3s;
             text-transform: uppercase;
         }
 
-        /* Ajuste de colores por los logos con fondo sólido */
-        .btn-yappi {
+        .btn-yappy {
             background-color: #ffffff; 
-            color: var(--yappi-blue);
-            border: 2px solid var(--yappi-blue);
+            color: var(--yappy-blue);
+            border: 2px solid var(--yappy-blue);
         }
 
         .btn-j4pay {
             background-color: var(--j4pay-green);
             color: white;
-			border: 2px solid #10852d
+            border: 2px solid #10852d;
         }
 
-        /* Estilo para los logos dentro de los botones */
-        .btn img {
-            height: 30px; /* Tamaño ideal para que no deforme el botón */
-            margin-right: 15px;
-            border-radius: 5px;
-        }
+        .btn img { height: 30px; margin-right: 15px; border-radius: 5px; }
+        .btn:disabled { background-color: #ccc; border-color: #999; cursor: not-allowed; filter: grayscale(1); }
+        .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
 
-        .btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
-
-        footer { margin-top: auto; padding: 20px; font-size: 0.8rem; color: #888; }
+        footer { margin-top: auto; padding: 20px; font-size: 0.8rem; color: #888; text-align: center; }
     </style>
 </head>
 <body>
@@ -109,16 +102,16 @@
 
     <div class="container">
         <h1>Pago de Ticket</h1>
-        <p style="color: #666;">Seleccione su método de pago</p>
+        <p id="statusText" style="color: #666;">Validando información...</p>
         
-        <div id="ticketDisplay" class="ticket-box">Escaneando...</div>
+        <div id="ticketDisplay" class="ticket-box">Cargando datos...</div>
 
-        <button class="btn btn-yappi" onclick="goYappi()">
-            <img src="yappy_logo.png" alt="Yappi">  
+        <button id="btnYappy" class="btn btn-yappy" onclick="goYappy()" disabled>
+            <img src="yappy_logo.png" alt="Yappy"> Pagar con Yappy
         </button>
 
-        <button class="btn btn-j4pay" onclick="goJ4()">
-            <img src="j4pay_logo.png" alt="J4Pay">  
+        <button id="btnJ4" class="btn btn-j4pay" onclick="goJ4()" disabled>
+            <img src="j4pay_logo.png" alt="J4Pay"> Pagar con J4Pay
         </button>
     </div>
 
@@ -127,18 +120,91 @@
     </footer>
 
     <script>
+        // --- CONFIGURACIÓN DE ESCALABILIDAD ---
+        const CONFIG = {
+            baseUrl: "https://eu-sandbox.j-pass.com", // Servidor central
+            instId: "3569036549",                   // ID de la instalación
+            feeServicio: 0.25                       // Fee fijo de Yappy
+        };
+
         const params = new URLSearchParams(window.location.search);
         const rawData = params.get('ticket') || 'SIN-DATA';
-        document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
+        let montoTotal = 0;
 
-        function goYappi() {
-            window.location.href = "https://pagos.yappi.com/checkout?ref=" + rawData;
+        async function main() {
+            if (rawData === 'SIN-DATA') {
+                showError("No se encontró número de ticket.");
+                return;
+            }
+
+            // 1. Validar existencia del ticket
+            const existe = await validarTicket();
+            if (!existe) return;
+
+            // 2. Consultar costo y desglosar
+            await obtenerCosto();
+        }
+
+        async function validarTicket() {
+            try {
+                // Endpoint para verificar ticket (basado en sniffing)
+                const res = await fetch(`${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${rawData}`);
+                if (!res.ok) throw new Error();
+                return true;
+            } catch (e) {
+                showError("Ticket no válido o ya pagado.");
+                return false;
+            }
+        }
+
+        async function obtenerCosto() {
+            try {
+                const res = await fetch(`${CONFIG.baseUrl}/api/v1/installation/${CONFIG.instId}/ticket/${rawData}/cost`);
+                const data = await res.json();
+
+                if (data.status === "ok") {
+                    const costoNeto = data.item.cost.value;
+                    montoTotal = costoNeto + CONFIG.feeServicio;
+
+                    document.getElementById('ticketDisplay').innerHTML = `
+                        <div style="font-size:0.8rem; color:#666">TICKET: ${rawData.substring(0,10)}...</div>
+                        <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                            <span>Parqueo:</span> <span>Q${costoNeto.toFixed(2)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.9rem; color:#888;">
+                            <span>Servicio Digital:</span> <span>Q${CONFIG.feeServicio.toFixed(2)}</span>
+                        </div>
+                        <hr style="border:0; border-top:1px dashed #ccc; margin:10px 0;">
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--tas-red); font-size:1.2rem;">
+                            <span>TOTAL:</span> <span>Q${montoTotal.toFixed(2)}</span>
+                        </div>
+                    `;
+                    
+                    document.getElementById('statusText').innerText = "Seleccione su método de pago";
+                    document.getElementById('btnYappy').disabled = false;
+                    document.getElementById('btnJ4').disabled = false;
+                }
+            } catch (e) {
+                showError("Error al recuperar el monto.");
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('statusText').innerText = "Error";
+            document.getElementById('ticketDisplay').innerHTML = `<span style="color:red">${msg}</span>`;
+        }
+
+        function goYappy() {
+            // URL de checkout con monto dinámico y referencia
+            window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${rawData}`;
         }
 
         function goJ4() {
-            window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
+            window.location.href = `${CONFIG.baseUrl}/#/user/external-ticket?installationCode=${CONFIG.instId}&identifier=${rawData}`;
         }
+
+        // Iniciar proceso
+        main();
     </script>
 </body>
 </html>
-
