@@ -12,7 +12,7 @@
             --tas-bg: #f4f4f4;
             --white: #ffffff;
             --yappi-blue: #004581; /* Color del texto de Yappi */
-            --j4pay-green: #80B256; /* El verde de tu logo J4Pay */
+            --j4pay-green: #80B256; /* El verde de logo J4Pay */
         }
 
         body {
@@ -141,12 +141,12 @@
     let montoFinal = 0;
     let ticketLargo = rawData; // Por defecto usamos el rawData que recibimos
 
-    // 1. Mostramos el ID en el cuadro gris
+    // Mostramos el ID en el cuadro gris
     document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
-    // 2. Lógica de redirección para Yappy
+    // Redirección para Yappy.html nuestro
     function goYappi() {
-        // Cambia 'debug.html' por 'Yappy.html' cuando renombres tu archivo
+        
         const nombreArchivoDestino = "yappy.html"; 
         
         if (rawData !== 'SIN-DATA') {
@@ -156,18 +156,19 @@
         }
     }
 
-    // Funciones para los otros botones (se mantienen igual)
+    // Enlace a J4Pay Showroom hay que cambiar a url segun cliente
     function goJ4() {
         window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
     }
 
     function goWompi() {
-        // Enlace temporal o de respaldo para Wompi
+        // Enlace simulacion temporal para Wompi
         window.location.href = `https://pagos.wompi.com.gt/checkout?ref=${rawData}&amount=${montoFinal}`;
     }
 </script>
 </body>
 </html>
+
 
 
 
