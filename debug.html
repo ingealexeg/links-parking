@@ -2,93 +2,83 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAS | Gestión de Pagos</title>
+    <title>TAS | Debug & Local Bridge</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --tas-red: #e31e24; --tas-dark: #231f20; --tas-bg: #f4f4f4; --white: #ffffff; --yappy-blue: #004581; --j4pay-green: #80B256; }
-        body { font-family: 'Montserrat', sans-serif; background-color: var(--tas-bg); margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-        .navbar { background-color: var(--tas-dark); width: 100%; padding: 15px 0; text-align: center; border-bottom: 4px solid var(--tas-red); margin-bottom: 40px; }
-        .logo { max-height: 50px; }
-        .container { background: var(--white); width: 85%; max-width: 400px; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
-        .ticket-box { background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 5px solid var(--tas-red); font-family: monospace; text-align: left; }
-        .btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 12px; margin: 15px 0; border-radius: 30px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: 0.3s; text-transform: uppercase; border: none; }
-        .btn-yappy { background: white; color: var(--yappy-blue); border: 2px solid var(--yappy-blue); }
-        .btn-j4pay { background: var(--j4pay-green); color: white; border: 2px solid #10852d; }
-        .btn img { height: 30px; margin-right: 15px; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        body { font-family: 'Montserrat', sans-serif; background: #f4f4f4; padding: 20px; display: flex; justify-content: center; }
+        .debug-card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 500px; width: 100%; }
+        h2 { color: #e31e24; margin-top: 0; }
+        .status { padding: 10px; border-radius: 5px; margin-bottom: 15px; font-weight: bold; }
+        .status.waiting { background: #fff3cd; color: #856404; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .data-box { background: #231f20; color: #00ff00; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 0.9rem; overflow-x: auto; }
+        .config-info { font-size: 0.8rem; color: #666; margin-top: 20px; border-top: 1px solid #eee; pt: 10px; }
     </style>
 </head>
 <body>
-    <div class="navbar"><img src="logo_tas_2025_blanco-768x349.png" class="logo"></div>
-    <div class="container">
-        <h1>Pago de Ticket</h1>
-        <p id="statusText">Cargando datos del servidor...</p>
-        <div id="ticketDisplay" class="ticket-box">Consultando monto...</div>
-        <button id="btnYappy" class="btn btn-yappy" onclick="goYappy()" disabled><img src="yappy_logo.png"> Pagar con Yappy</button>
-        <button id="btnJ4" class="btn btn-j4pay" onclick="goJ4()"><img src="j4pay_logo.png"> Pagar con J4Pay</button>
+
+    <div class="debug-card">
+        <h2>Bridge de Diagnóstico</h2>
+        <div id="connectionStatus" class="status waiting">Iniciando conexión local...</div>
+        
+        <p><strong>Respuesta del Servidor Janus:</strong></p>
+        <div id="rawResponse" class="data-box">Esperando datos...</div>
+
+        <div class="config-info">
+            <strong>Configuración Actual:</strong><br>
+            IP Objetivo: <span id="targetIpDisplay"></span><br>
+            Endpoint: <code>/api/v1/installation/3569036549/ticket/cost</code>
+        </div>
     </div>
 
-<script>
-    const CONFIG = { fee: 0.25 };
-    const params = new URLSearchParams(window.location.search);
-    const ticket = params.get('ticket') || 'SIN-DATA';
-    let montoTotal = 0;
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN ESCALABLE
+        // ==========================================
+        // Cuando IT te de la IP pública, solo cambias esta línea:
+        const JANUS_SERVER_IP = "10.10.5.15"; 
+        // ==========================================
 
-    function init() {
-        if (ticket === 'SIN-DATA') {
-            document.getElementById('ticketDisplay').innerText = "TICKET NO DETECTADO";
-            return;
+        const params = new URLSearchParams(window.location.search);
+        const ticket = params.get('ticket') || "WvHFg6cChjWYBzgVqXYfWdfjxbcXYMpM";
+
+        document.getElementById('targetIpDisplay').innerText = JANUS_SERVER_IP;
+
+        async function testLocalConnection() {
+            const statusDiv = document.getElementById('connectionStatus');
+            const responseDiv = document.getElementById('rawResponse');
+
+            // Construimos la URL apuntando directamente al servidor local
+            // Nota: Se asume puerto 80 o el que Janus use por defecto
+            const localUrl = `http://${JANUS_SERVER_IP}/api/v1/installation/3569036549/ticket/${ticket}/cost`;
+
+            try {
+                // Petición directa (Sin proxies, ya que estamos en la misma red)
+                const response = await fetch(localUrl, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+                const data = await response.json();
+
+                statusDiv.className = "status success";
+                statusDiv.innerText = "¡Conexión Exitosa!";
+                responseDiv.innerText = JSON.stringify(data, null, 4);
+
+                console.log("Datos recibidos:", data);
+
+            } catch (err) {
+                statusDiv.className = "status error";
+                statusDiv.innerText = "Error de Conexión Local";
+                responseDiv.innerText = `Causa: ${err.message}\n\nPosibles razones:\n1. No estás en la misma red que el servidor.\n2. El servidor no tiene habilitado CORS.\n3. La IP ${JANUS_SERVER_IP} es incorrecta.`;
+            }
         }
 
-        // Mostramos el ID del ticket y habilitamos la entrada manual
-        document.getElementById('statusText').innerText = "Por seguridad, ingrese el monto mostrado en la pantalla del parqueo";
-        
-        document.getElementById('ticketDisplay').innerHTML = `
-            <div style="font-size:0.8rem; color:#888; margin-bottom:10px;">TICKET: ${ticket}</div>
-            <div style="margin-bottom:10px;">
-                <label style="font-size:0.9rem; font-weight:bold;">Monto a pagar (Q):</label><br>
-                <input type="number" id="inputMonto" placeholder="0.00" step="0.01" 
-                    style="width:80%; padding:10px; font-size:1.2rem; border-radius:10px; border:2px solid var(--tas-red); text-align:center; margin-top:5px;">
-            </div>
-            <div id="desglose" style="display:none; font-size:0.8rem; background:#fff; padding:10px; border-radius:5px;">
-                <div style="display:flex; justify-content:space-between;"><span>Servicio Digital:</span> <span>Q${CONFIG.fee.toFixed(2)}</span></div>
-                <div style="display:flex; justify-content:space-between; font-weight:bold; color:red; margin-top:5px;">
-                    <span>TOTAL A PAGAR:</span> <span id="totalTxt">Q0.00</span>
-                </div>
-            </div>
-        `;
-
-        // Escuchar cambios en el input para actualizar el botón
-        document.getElementById('inputMonto').addEventListener('input', calcularTotal);
-    }
-
-    function calcularTotal() {
-        const montoBase = parseFloat(document.getElementById('inputMonto').value);
-        if (montoBase > 0) {
-            montoTotal = montoBase + CONFIG.fee;
-            document.getElementById('totalTxt').innerText = "Q" + montoTotal.toFixed(2);
-            document.getElementById('desglose').style.display = "block";
-            document.getElementById('btnYappy').disabled = false;
-        } else {
-            document.getElementById('btnYappy').disabled = true;
-            document.getElementById('desglose').style.display = "none";
-        }
-    }
-
-    function goYappy() {
-        if (montoTotal > 0) {
-            // Ahora mandamos el monto que el usuario ingresó + tu fee
-            window.location.href = `https://pagos.yappy.com/checkout?amount=${montoTotal.toFixed(2)}&ref=${ticket}`;
-        }
-    }
-
-    function goJ4() {
-        // Opción de reserva por si el usuario prefiere el método original
-        window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${ticket}`;
-    }
-
-    init();
-</script>
+        // Ejecutar prueba
+        testLocalConnection();
+    </script>
 </body>
 </html>
