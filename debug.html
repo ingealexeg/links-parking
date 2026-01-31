@@ -2,87 +2,101 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TAS Bridge | Postman Identity Mirror</title>
+    <title>TAS Bridge | Postman Mirror Final</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .card { background: #1e1e1e; width: 90%; max-width: 650px; padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; }
-        .status { padding: 15px; margin-bottom: 20px; border-radius: 6px; text-align: center; font-weight: bold; border: 1px solid transparent; }
-        .error { background: #3a1c1c; color: #ff8080; border-color: #5c2b2b; }
-        .success { background: #1c3a25; color: #80ff95; border-color: #2b5c35; }
-        .console { background: #000; color: #00ff41; padding: 20px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; overflow-y: auto; max-height: 350px; border: 1px solid #222; }
-        .highlight { color: #ffcc00; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #00ff41; display: flex; justify-content: center; padding: 20px; }
+        .container { background: #1a1a1a; width: 100%; max-width: 650px; padding: 25px; border-radius: 10px; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .status-bar { padding: 15px; margin-bottom: 20px; border-radius: 5px; text-align: center; font-weight: bold; font-size: 1.1rem; }
+        .waiting { background: #332b00; color: #ffcc00; border: 1px solid #665500; }
+        .success { background: #1b3321; color: #44ff44; border: 1px solid #2b5c35; }
+        .error { background: #331b1b; color: #ff4444; border: 1px solid #5c2b2b; }
+        pre { background: #000; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; font-size: 12px; border: 1px solid #222; }
+        .label { color: #888; font-size: 0.8rem; margin-bottom: 5px; display: block; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2 style="margin-top:0; color: #fff; border-bottom: 2px solid #e31e24; padding-bottom: 10px;">Bridge Mirror Mode</h2>
-        <div id="status" class="status" style="background: #2a2a2a;">Esperando ejecución...</div>
-        <div id="log" class="console">Iniciando secuencia de mimetización...</div>
-    </div>
+
+<div class="container">
+    <h2 style="color: #fff; margin-top: 0; border-bottom: 2px solid #e31e24; padding-bottom: 10px;">Bridge Final Debug</h2>
+    
+    <div id="statusBox" class="status-bar waiting">CONECTANDO CON JANUS...</div>
+
+    <span class="label">TICKET ENVIADO:</span>
+    <pre id="ticketSent">Cargando...</pre>
+
+    <span class="label">RESPUESTA DEL SERVIDOR:</span>
+    <pre id="rawResponse">Esperando respuesta...</pre>
+</div>
 
 <script>
-    const API_BASE = "http://10.10.5.15:8080/janus-integration/api/ext";
-    const ticket = new URLSearchParams(window.location.search).get('ticket');
+    const SERVER_URL = "http://10.10.5.15:8080/janus-integration/api/ext";
+    const ticketParams = new URLSearchParams(window.location.search);
+    const TICKET_ID = ticketParams.get('ticket');
 
-    async function run() {
-        const log = document.getElementById('log');
-        const status = document.getElementById('status');
+    async function ejecutarFlujoPostman() {
+        const statusBox = document.getElementById('statusBox');
+        const rawLog = document.getElementById('rawResponse');
+        const ticketLog = document.getElementById('ticketSent');
 
-        if (!ticket) {
-            status.innerText = "ERROR: TICKET NO ENCONTRADO EN URL";
-            status.className = "status error";
+        if (!TICKET_ID) {
+            statusBox.innerText = "ERROR: NO HAY TICKET EN LA URL";
+            statusBox.className = "status-bar error";
             return;
         }
 
+        ticketLog.innerText = TICKET_ID;
+
         try {
-            // 1. LOGIN
-            log.innerHTML += `> Obteniendo token de acceso...\n`;
-            const login = await fetch(`${API_BASE}/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            // 1. LOGIN PARA OBTENER TOKEN FRESCO
+            const loginRes = await fetch(`${SERVER_URL}/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ "username": "TasGT25", "password": "Hub$2025" })
             });
-            const loginXml = await login.text();
+            const loginXml = await loginRes.text();
             const token = loginXml.match(/<value>(.*?)<\/value>/)[1];
-            log.innerHTML += `> Token: <span class="highlight">${token.substring(0,15)}...</span>\n`;
 
-            // 2. CONSULTA ESPEJO (Headers de image_ca215f.png)
-            log.innerHTML += `> Enviando consulta (Identidad Postman)...\n`;
-            const res = await fetch(`${API_BASE}/payment/get/ticketdata`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Janus-TP-Authorization': token,
-                    'Accept': '*/*',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive'
-                },
-                body: JSON.stringify({
-                    "mediaTypeIdentifier": "barcode",
-                    "ticketIdentifier": ticket.trim()
-                })
+            // 2. CONSULTA (CÓDIGO POSTMAN EXACTO)
+            const myHeaders = new Headers();
+            myHeaders.append("Janus-TP-Authorization", token);
+            myHeaders.append("Content-Type", "application/json");
+
+            const rawBody = JSON.stringify({
+                "mediaTypeIdentifier": "barcode",
+                "ticketIdentifier": TICKET_ID.trim()
             });
 
-            const text = await res.text();
-            log.innerHTML += `> Respuesta Raw:\n<span style="color:#888">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>\n`;
+            const requestOptions = {
+                method: "POST",
+                headers: myHeaders,
+                body: rawBody,
+                redirect: "follow"
+            };
 
-            if (text.includes("<status>OK</status>")) {
-                const monto = text.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
-                status.innerText = `ÉXITO: Q${monto} DETECTADOS`;
-                status.className = "status success";
-                log.innerHTML += `\n> <span class="highlight">PROCESO COMPLETADO: MONTO Q${monto}</span>`;
+            const response = await fetch(`${SERVER_URL}/payment/get/ticketdata`, requestOptions);
+            const result = await response.text();
+            
+            // MOSTRAR RESULTADO
+            rawLog.innerText = result;
+
+            if (result.includes("<status>ok</status>") || result.includes("<status>OK</status>")) {
+                const monto = result.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
+                statusBox.innerText = `ÉXITO: Q${monto} A COBRAR`;
+                statusBox.className = "status-bar success";
             } else {
-                status.innerText = "JANUS RECHAZÓ LA PETICIÓN";
-                status.className = "status error";
+                statusBox.innerText = "ERROR EN RESPUESTA DE JANUS";
+                statusBox.className = "status-bar error";
             }
-        } catch (e) {
-            status.innerText = "ERROR DE COMUNICACIÓN";
-            status.className = "status error";
-            log.innerHTML += `> Fallo Crítico: ${e.message}`;
+
+        } catch (error) {
+            statusBox.innerText = "FALLO CRÍTICO DE CONEXIÓN";
+            statusBox.className = "status-bar error";
+            rawLog.innerText = error;
         }
     }
 
-    window.onload = run;
+    window.onload = ejecutarFlujoPostman;
 </script>
+
 </body>
 </html>
