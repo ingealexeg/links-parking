@@ -50,7 +50,20 @@
 <script>
     const API_BASE = "http://10.10.5.15:8080/janus-integration/api/ext";
     const ticketParam = new URLSearchParams(window.location.search).get('ticket');
-    let montoGlobal = 0, ticketRealGlobal = "", tokenGlobal = "";
+    
+    // Variables globales
+    let montoGlobal = 0;
+    let ticketRealGlobal = "";
+    let tokenGlobal = "";
+    let tariffIdGlobal = 10; // Valor por defecto según tu Postman
+
+    // Función para generar UUID con formato 8-4-4-4-12 (Como en tu imagen)
+    function generarUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16).toUpperCase();
+        });
+    }
 
     async function initPayment() {
         const montoDiv = document.getElementById('monto-display');
@@ -58,7 +71,6 @@
         if (!ticketParam) return;
 
         try {
-            // 1. Login
             const login = await fetch(`${API_BASE}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -67,7 +79,6 @@
             const loginText = await login.text();
             tokenGlobal = loginText.match(/<value>(.*?)<\/value>/)[1];
 
-            // 2. Get Data
             const response = await fetch(`${API_BASE}/payment/get/ticketdata`, {
                 method: "POST",
                 headers: { "Janus-TP-Authorization": tokenGlobal, "Content-Type": "application/json" },
@@ -78,6 +89,8 @@
             if (result.includes("<status>OK</status>")) {
                 montoGlobal = result.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
                 ticketRealGlobal = result.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
+                tariffIdGlobal = result.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
+
                 montoDiv.innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
                 yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="simularPagoYappy()">Confirmar Pago</button>`;
@@ -92,44 +105,52 @@
         const email = document.getElementById('email').value;
         if (!nit || !email) return alert("Complete los datos");
 
-        const uuid = "FACT-" + Math.random().toString(36).substr(2, 9).toUpperCase();
-        // Descargamos el JSON de factura
-        const blob = new Blob([JSON.stringify({nit, email, monto: montoGlobal, ticket: ticketRealGlobal, uuid})], {type:'application/json'});
+        const uuidFormateado = generarUUID(); // Ejemplo: 5AE37478-D1F4...
+        
+        // Simulación de descarga de factura
+        const blob = new Blob([JSON.stringify({nit, email, monto: montoGlobal, ticket: ticketRealGlobal, reference: uuidFormateado})], {type:'application/json'});
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Factura_${ticketRealGlobal}.json`; a.click();
 
-        await aplicarPagoJanus(uuid);
+        await aplicarPagoJanus(uuidFormateado);
     }
 
     async function aplicarPagoJanus(uuid) {
         const container = document.getElementById('yappy-container');
-        container.innerHTML = "<div class='loading-spinner'>Abriendo talanquera...</div>";
+        container.innerHTML = "<div class='loading-spinner'>Sincronizando con talanquera...</div>";
 
-        // ESTRUCTURA LIMPIA PARA JANUS
+        // ESTRUCTURA PLANA (MIMETIZANDO POSTMAN IMAGEN 2)
         const rawApply = JSON.stringify({
             "mediaTypeIdentifier": "barcode",
-            "ticketIdentifier": ticketRealGlobal, // IMPORTANTE: Usar el ticket corto
-            "externalPaymentInfo": {
-                "amountPaid": parseFloat(montoGlobal),
-                "externalTransactionId": uuid,
-                "paymentDateTime": new Date().toISOString()
+            "ticketIdentifier": ticketRealGlobal,
+            "amountToPay": parseFloat(montoGlobal),
+            "calculatedCost": parseFloat(montoGlobal),
+            "paymentUniqueReferenceId": uuid,
+            "tariffProfileId": parseInt(tariffIdGlobal),
+            "paymentReceiptInfo": {
+                "receiptPaymentMediaIdentifier": "yappy",
+                "receiptUniqueId": uuid
             }
         });
 
         try {
             const response = await fetch(`${API_BASE}/payment/apply`, {
                 method: "POST",
-                headers: { "Janus-TP-Authorization": tokenGlobal, "Content-Type": "application/json" },
+                headers: { 
+                    "Janus-TP-Authorization": tokenGlobal, 
+                    "Content-Type": "application/json" 
+                },
                 body: rawApply
             });
             const resText = await response.text();
             
             if (resText.includes("<status>OK</status>")) {
-                container.innerHTML = "<b style='color:var(--tas-green)'>✓ PAGO EXITOSO. PUEDE SALIR.</b>";
+                container.innerHTML = "<b style='color:var(--tas-green); font-size:1.1rem;'>✓ PAGO EXITOSO. PUEDE SALIR.</b>";
             } else {
-                container.innerHTML = "<b style='color:orange'>Error Janus: Revise Logs de Servidor</b>";
+                container.innerHTML = "<b style='color:orange'>Error de Validación en Servidor</b>";
+                console.log("Error Janus:", resText);
             }
         } catch (error) {
-            container.innerHTML = "<b style='color:red'>Error de red al aplicar pago</b>";
+            container.innerHTML = "<b style='color:red'>Error de conexión</b>";
         }
     }
 
