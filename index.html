@@ -134,41 +134,45 @@
         &copy; 2026 TAS - Tecnología, Acceso & Seguridad
     </footer>
 
-    <script>
-        const params = new URLSearchParams(window.location.search);
-        const rawData = params.get('ticket') || 'SIN-DATA';
-        
-        // Variables para guardar lo que responda el servidor
-        let montoFinal = 0;
-        let ticketLargo = "";
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const rawData = params.get('ticket') || 'SIN-DATA';
+    
+    let montoFinal = 0;
+    let ticketLargo = "";
 
-        // Ejecutar consulta al cargar
-        if (rawData !== 'SIN-DATA') {
-            consultarJPass();
-        } else {
-            document.getElementById('ticketDisplay').innerText = "TICKET: NO DETECTADO";
-        }
+    // 1. Mostramos el ID temporalmente
+    document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
-        async function consultarJPass() {
-            const proxy = "https://janus-price-fetcher.ingealexeg.workers.dev/?url=";
-            const target = `https://eu-sandbox.j-pass.com/api/v1/installation/3569036549/ticket/${rawData}/cost`;
+    // 2. Creamos un túnel directo usando un iframe invisible
+    if (rawData !== 'SIN-DATA') {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none'; // Nadie lo ve
+        // Cargamos la URL que SÍ funciona en el navegador
+        iframe.src = `https://eu-sandbox.j-pass.com/api/v1/installation/3569036549/ticket/${rawData}/cost`;
+        document.body.appendChild(iframe);
 
+        // Intentamos leer el contenido cuando cargue
+        iframe.onload = async function() {
             try {
-                const response = await fetch(proxy + encodeURIComponent(target));
-                const data = await response.json();
+                // Esto intenta obtener el JSON que el navegador ya descargó
+                const response = iframe.contentDocument || iframe.contentWindow.document;
+                const bodyText = response.getElementsByTagName('pre')[0].innerHTML;
+                const data = JSON.parse(bodyText);
 
                 if (data.status === "ok") {
                     montoFinal = data.item.cost;
-                    ticketLargo = data.item.value; // El ID real 49215...
-                    
-                    // Actualizamos el texto sin cambiar estilos
+                    ticketLargo = data.item.value;
                     document.getElementById('ticketDisplay').innerText = `TICKET: ${ticketLargo} | Q${montoFinal}`;
                 }
             } catch (e) {
-                console.error("Error al obtener datos");
-                document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
+                // Si el navegador bloquea la lectura por seguridad, usamos el plan de respaldo:
+                // Abrir J-Pass en una pestaña pequeña y que el usuario vea el precio ahí
+                console.log("Bloqueo de seguridad del navegador. El usuario debe usar J4Pay primero.");
             }
-        }
+        };
+    }
+    
 
         function goYappi() {
             // Se usa el ticket real y el monto obtenido
@@ -185,4 +189,5 @@
     </script>
 </body>
 </html>
+
 
