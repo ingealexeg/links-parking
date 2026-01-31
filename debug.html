@@ -2,83 +2,178 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TAS | Debug & Local Bridge</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAS | Janus Encrypted Debug</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Montserrat', sans-serif; background: #f4f4f4; padding: 20px; display: flex; justify-content: center; }
-        .debug-card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 500px; width: 100%; }
-        h2 { color: #e31e24; margin-top: 0; }
-        .status { padding: 10px; border-radius: 5px; margin-bottom: 15px; font-weight: bold; }
-        .status.waiting { background: #fff3cd; color: #856404; }
-        .status.success { background: #d4edda; color: #155724; }
-        .status.error { background: #f8d7da; color: #721c24; }
-        .data-box { background: #231f20; color: #00ff00; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 0.9rem; overflow-x: auto; }
-        .config-info { font-size: 0.8rem; color: #666; margin-top: 20px; border-top: 1px solid #eee; pt: 10px; }
+        :root {
+            --tas-red: #e31e24;
+            --tas-dark: #231f20;
+            --tas-bg: #f4f4f4;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--tas-bg);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .debug-container {
+            background: var(--white);
+            width: 90%;
+            max-width: 700px;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        h2 { color: var(--tas-dark); border-bottom: 3px solid var(--tas-red); padding-bottom: 10px; margin-top: 0; }
+
+        .status-box {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .waiting { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        .console {
+            background: #231f20;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #444;
+        }
+
+        .highlight { color: #ffcc00; font-weight: bold; }
+
+        .info-tag {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 15px;
+            background: #eee;
+            padding: 10px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
 
-    <div class="debug-card">
-        <h2>Bridge de Diagnóstico</h2>
-        <div id="connectionStatus" class="status waiting">Iniciando conexión local...</div>
-        
-        <p><strong>Respuesta del Servidor Janus:</strong></p>
-        <div id="rawResponse" class="data-box">Esperando datos...</div>
+<div class="debug-container">
+    <h2>TAS Bridge Debugger (Encrypted Mode)</h2>
+    
+    <div id="statusIndicator" class="status-box waiting">Esperando ticket encriptado...</div>
+    
+    <div id="debugConsole" class="console">Listo para procesar...</div>
 
-        <div class="config-info">
-            <strong>Configuración Actual:</strong><br>
-            IP Objetivo: <span id="targetIpDisplay"></span><br>
-            Endpoint: <code>/api/v1/installation/3569036549/ticket/cost</code>
-        </div>
+    <div class="info-tag">
+        <strong>Uso:</strong> <code>debug.html?ticket=WvHFg6cChjWYBzgVqXYf...</code><br>
+        <strong>Destino:</strong> 10.10.5.15:8080 (Janus API)
     </div>
+</div>
 
-    <script>
-        // ==========================================
-        // CONFIGURACIÓN ESCALABLE
-        // ==========================================
-        // Cuando IT te de la IP pública, solo cambias esta línea:
-        const JANUS_SERVER_IP = "10.10.5.15"; 
-        // ==========================================
+<script>
+    const SERVER_URL = "http://10.10.5.15:8080/janus-integration/api/ext";
+    const CREDENTIALS = { "username": "TasGT25", "password": "Hub$2025" };
 
-        const params = new URLSearchParams(window.location.search);
-        const ticket = params.get('ticket') || "WvHFg6cChjWYBzgVqXYfWdfjxbcXYMpM";
+    const urlParams = new URLSearchParams(window.location.search);
+    const encryptedTicket = urlParams.get('ticket');
 
-        document.getElementById('targetIpDisplay').innerText = JANUS_SERVER_IP;
+    const consoleDiv = document.getElementById('debugConsole');
+    const statusDiv = document.getElementById('statusIndicator');
 
-        async function testLocalConnection() {
-            const statusDiv = document.getElementById('connectionStatus');
-            const responseDiv = document.getElementById('rawResponse');
+    function log(msg, type = 'normal') {
+        const timestamp = new Date().toLocaleTimeString();
+        let formattedMsg = msg;
+        if (type === 'warn') formattedMsg = `<span class="highlight">${msg}</span>`;
+        consoleDiv.innerHTML += `\n[${timestamp}] > ${formattedMsg}`;
+        consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    }
 
-            // Construimos la URL apuntando directamente al servidor local
-            // Nota: Se asume puerto 80 o el que Janus use por defecto
-            const localUrl = `http://${JANUS_SERVER_IP}/api/v1/installation/3569036549/ticket/${ticket}/cost`;
-
-            try {
-                // Petición directa (Sin proxies, ya que estamos en la misma red)
-                const response = await fetch(localUrl, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-
-                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-
-                const data = await response.json();
-
-                statusDiv.className = "status success";
-                statusDiv.innerText = "¡Conexión Exitosa!";
-                responseDiv.innerText = JSON.stringify(data, null, 4);
-
-                console.log("Datos recibidos:", data);
-
-            } catch (err) {
-                statusDiv.className = "status error";
-                statusDiv.innerText = "Error de Conexión Local";
-                responseDiv.innerText = `Causa: ${err.message}\n\nPosibles razones:\n1. No estás en la misma red que el servidor.\n2. El servidor no tiene habilitado CORS.\n3. La IP ${JANUS_SERVER_IP} es incorrecta.`;
-            }
+    async function ejecutarFlujo() {
+        if (!encryptedTicket) {
+            statusDiv.className = "status-box error";
+            statusDiv.innerText = "ERROR: TICKET ENCRIPTADO NO ENCONTRADO";
+            log("Por favor, usa la URL con el parámetro: ?ticket=CÓDIGO_LARGO", "warn");
+            return;
         }
 
-        // Ejecutar prueba
-        testLocalConnection();
-    </script>
+        log(`Procesando ticket encriptado: ${encryptedTicket.substring(0, 15)}...`, "warn");
+
+        try {
+            // 1. LOGIN
+            log("Paso 1: Obteniendo token de acceso...");
+            const loginRes = await fetch(`${SERVER_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(CREDENTIALS)
+            });
+
+            const loginXml = await loginRes.text();
+            const tokenMatch = loginXml.match(/<token>.*?<value>(.*?)<\/value>.*?<\/token>/);
+            
+            if (!tokenMatch) throw new Error("No se pudo obtener el token dinámico.");
+            const token = tokenMatch[1];
+            log("Token recibido y validado.");
+
+            // 2. CONSULTA CON TICKET ENCRIPTADO
+            log("Paso 2: Consultando costo con ticket encriptado...");
+            const ticketRes = await fetch(`${SERVER_URL}/payment/get/ticketdata`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Janus-TP-Authorization': token
+                },
+                body: JSON.stringify({
+                    "mediaTypeIdentifier": "barcode", // Ajustar si Júpiter pide otro tipo para encriptados
+                    "ticketIdentifier": encryptedTicket
+                })
+            });
+
+            const ticketXml = await ticketRes.text();
+            
+            // 3. PROCESAR RESPUESTA
+            const montoMatch = ticketXml.match(/<amountToPay>(.*?)<\/amountToPay>/);
+            const monto = montoMatch ? montoMatch[1] : "No disponible";
+            
+            // Si el XML trae el ID real (desencriptado), lo buscamos
+            const ticketRealMatch = ticketXml.match(/<ticketNumber>(.*?)<\/ticketNumber>/);
+            const ticketReal = ticketRealMatch ? ticketRealMatch[1] : "N/A";
+
+            statusDiv.className = "status-box success";
+            statusDiv.innerText = `COSTO ENCONTRADO: Q${monto}`;
+            
+            log("-----------------------------------------");
+            log(`TICKET REAL: ${ticketReal}`, "warn");
+            log(`MONTO A COBRAR: Q${monto}`, "warn");
+            log("-----------------------------------------");
+            log("Respuesta XML completa:");
+            log(ticketXml.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+
+        } catch (error) {
+            statusDiv.className = "status-box error";
+            statusDiv.innerText = "ERROR EN EL BRIDGE";
+            log(`DETALLE: ${error.message}`);
+        }
+    }
+
+    window.onload = ejecutarFlujo;
+</script>
+
 </body>
 </html>
