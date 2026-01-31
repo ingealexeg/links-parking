@@ -2,108 +2,81 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TAS | Janus Bridge Final</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <title>TAS Bridge | Final Postman Mirror</title>
     <style>
-        :root { --tas-red: #e31e24; --tas-dark: #231f20; }
-        body { font-family: 'Montserrat', sans-serif; background: #f4f4f4; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .debug-container { background: #fff; width: 95%; max-width: 750px; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .status-box { padding: 15px; border-radius: 5px; margin: 15px 0; font-weight: bold; text-align: center; }
-        .waiting { background: #fff3cd; color: #856404; }
+        body { font-family: sans-serif; background: #f0f0f0; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; width: 100%; max-width: 600px; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .console { background: #1a1a1a; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 13px; overflow-x: auto; white-space: pre-wrap; }
+        .status { padding: 10px; margin-bottom: 10px; border-radius: 4px; font-weight: bold; text-align: center; }
+        .error { background: #ffdada; color: #a00; }
         .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
-        .console { background: #1e1e1e; color: #00ff00; padding: 20px; border-radius: 5px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; max-height: 450px; overflow-y: auto; border: 1px solid #444; }
     </style>
 </head>
 <body>
-    <div class="debug-container">
-        <h2>TAS Bridge Debugger (Modo Espejo Postman)</h2>
-        <div id="statusIndicator" class="status-box waiting">Iniciando proceso...</div>
-        <div id="debugConsole" class="console">Esperando instrucción...</div>
+    <div class="card">
+        <h3>TAS Debugger (Mirror Mode)</h3>
+        <div id="status" class="status">Iniciando...</div>
+        <div id="log" class="console">Esperando respuesta...</div>
     </div>
 
 <script>
-    const SERVER_URL = "http://10.10.5.15:8080/janus-integration/api/ext";
-    const CREDENTIALS = { "username": "TasGT25", "password": "Hub$2025" };
-    const urlParams = new URLSearchParams(window.location.search);
-    const ticketVariable = urlParams.get('ticket');
+    const API_BASE = "http://10.10.5.15:8080/janus-integration/api/ext";
+    const ticket = new URLSearchParams(window.location.search).get('ticket');
 
-    const consoleDiv = document.getElementById('debugConsole');
-    const statusDiv = document.getElementById('statusIndicator');
+    async function run() {
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
 
-    function log(msg, color = "#00ff00") {
-        const time = new Date().toLocaleTimeString();
-        consoleDiv.innerHTML += `\n<span style="color:${color}">[${time}] > ${msg}</span>`;
-        consoleDiv.scrollTop = consoleDiv.scrollHeight;
-    }
-
-    async function ejecutarBridge() {
-        if (!ticketVariable) {
-            statusDiv.className = "status-box error";
-            statusDiv.innerText = "FALTA TICKET EN URL";
-            log("Error: No se detectó el parámetro ?ticket=", "#ff4444");
+        if (!ticket) {
+            status.innerText = "Error: Falta ticket en URL";
+            status.className = "status error";
             return;
         }
 
         try {
             // 1. LOGIN
-            log("Paso 1: Autenticando...");
-            const loginRes = await fetch(`${SERVER_URL}/login`, {
+            const login = await fetch(`${API_BASE}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(CREDENTIALS)
+                body: JSON.stringify({ "username": "TasGT25", "password": "Hub$2025" })
             });
-            const loginRaw = await loginRes.text();
-            const tokenMatch = loginRaw.match(/<token>.*?<value>(.*?)<\/value>.*?<\/token>/);
-            
-            if (!tokenMatch) throw new Error("No se pudo extraer el token.");
-            const token = tokenMatch[1];
-            log("Token obtenido exitosamente.");
+            const loginXml = await login.text();
+            const token = loginXml.match(/<value>(.*?)<\/value>/)[1];
+            log.innerHTML = `> Token obtenido: ${token.substring(0,10)}...\n`;
 
-            // 2. CONSULTA (IDÉNTICO A POSTMAN)
-            log("Paso 2: Consultando datos del ticket...");
-            const ticketRes = await fetch(`${SERVER_URL}/payment/get/ticketdata`, {
+            // 2. CONSULTA (Mimetizando Postman exactamente)
+            const res = await fetch(`${API_BASE}/payment/get/ticketdata`, {
                 method: 'POST',
+                mode: 'cors', 
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': '*/*', // Aceptamos cualquier formato para evitar el Generic Error
-                    'Janus-TP-Authorization': token
+                    'Janus-TP-Authorization': token,
+                    'Accept': '*/*'  // Postman usa esto por defecto
                 },
                 body: JSON.stringify({
                     "mediaTypeIdentifier": "barcode",
-                    "ticketIdentifier": ticketVariable.trim()
+                    "ticketIdentifier": ticket.trim()
                 })
             });
 
-            const responseText = await ticketRes.text();
-            log("Respuesta del servidor recibida.");
+            const text = await res.text();
+            log.innerHTML += `> Respuesta Raw: ${text}\n`;
 
-            // 3. PARSEO FLEXIBLE (BUSCAMOS EL MONTO SIN IMPORTAR SI ES XML O JSON)
-            // Intentamos encontrar 'amountToPay' en cualquier formato
-            const montoMatch = responseText.match(/amountToPay[">:\s]+([\d.]+)/);
-            
-            if (montoMatch && !responseText.includes("error")) {
-                const monto = montoMatch[1];
-                statusDiv.className = "status-box success";
-                statusDiv.innerText = `COSTO ENCONTRADO: Q${monto}`;
-                log(`\n-----------------------------------`);
-                log(`ÉXITO: MONTO A PAGAR Q${monto}`, "#ffff00");
-                log(`-----------------------------------\n`);
+            if (text.includes("<status>OK</status>") || text.includes('"status":"ok"')) {
+                const monto = text.match(/amountToPay[">:\s]+([\d.]+)/)[1];
+                status.innerText = `ÉXITO: Q${monto}`;
+                status.className = "status success";
             } else {
-                statusDiv.className = "status-box error";
-                statusDiv.innerText = "EL SERVIDOR RECHAZÓ EL TICKET";
-                log("Servidor reportó error. Respuesta completa:", "#ff4444");
-                log(responseText, "#88d0ff");
+                status.innerText = "Error retornado por Janus";
+                status.className = "status error";
             }
-
-        } catch (error) {
-            statusDiv.className = "status-box error";
-            statusDiv.innerText = "ERROR DE CONEXIÓN";
-            log("DETALLE: " + error.message, "#ff4444");
+        } catch (e) {
+            status.innerText = "Error de conexión (Check CORS)";
+            status.className = "status error";
+            log.innerHTML += `> Error: ${e.message}`;
         }
     }
-
-    window.onload = ejecutarBridge;
+    run();
 </script>
 </body>
 </html>
