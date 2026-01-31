@@ -2,27 +2,25 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TAS | Janus JSON Debug</title>
+    <title>TAS | Janus Bridge Final</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --tas-red: #e31e24; --tas-dark: #231f20; --white: #ffffff; }
-        body { font-family: 'Montserrat', sans-serif; background: #f4f4f4; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .debug-container { background: var(--white); width: 95%; max-width: 700px; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { color: var(--tas-dark); border-bottom: 3px solid var(--tas-red); padding-bottom: 10px; margin-top: 0; }
+        :root { --tas-red: #e31e24; --tas-dark: #231f20; }
+        body { font-family: 'Montserrat', sans-serif; background: #f4f4f4; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .debug-container { background: #fff; width: 95%; max-width: 750px; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .status-box { padding: 15px; border-radius: 5px; margin: 15px 0; font-weight: bold; text-align: center; }
         .waiting { background: #fff3cd; color: #856404; }
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
-        .console { background: #1e1e1e; color: #00ff00; padding: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .console { background: #1e1e1e; color: #00ff00; padding: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; max-height: 450px; overflow-y: auto; }
     </style>
 </head>
 <body>
-
-<div class="debug-container">
-    <h2>TAS Bridge Debugger (JSON Mode)</h2>
-    <div id="statusIndicator" class="status-box waiting">Procesando...</div>
-    <div id="debugConsole" class="console">Iniciando...</div>
-</div>
+    <div class="debug-container">
+        <h2>TAS Bridge Debugger (Modo Postman)</h2>
+        <div id="statusIndicator" class="status-box waiting">Iniciando...</div>
+        <div id="debugConsole" class="console">Esperando ticket...</div>
+    </div>
 
 <script>
     const SERVER_URL = "http://10.10.5.15:8080/janus-integration/api/ext";
@@ -46,8 +44,8 @@
         }
 
         try {
-            // 1. LOGIN (Tratamos la respuesta como texto porque Janus mezcla formatos)
-            log("Paso 1: Login...");
+            // PASO 1: LOGIN
+            log("Paso 1: Autenticando...");
             const loginRes = await fetch(`${SERVER_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -55,18 +53,17 @@
             });
             const loginRaw = await loginRes.text();
             const tokenMatch = loginRaw.match(/<token>.*?<value>(.*?)<\/value>.*?<\/token>/);
-            
             if (!tokenMatch) throw new Error("No se obtuvo token.");
             const token = tokenMatch[1];
-            log("Token obtenido.");
+            log("Token obtenido exitosamente.");
 
-            // 2. CONSULTA (Aquí el servidor nos responde en JSON según tu imagen)
+            // PASO 2: CONSULTA (IDÉNTICO A POSTMAN)
             log("Paso 2: Consultando ticket...");
             const ticketRes = await fetch(`${SERVER_URL}/payment/get/ticketdata`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    'Accept': 'application/xml', // Forzamos XML como en el ejemplo exitoso
                     'Janus-TP-Authorization': token
                 },
                 body: JSON.stringify({
@@ -75,21 +72,23 @@
                 })
             });
 
-            // Parseamos como JSON directamente
-            const data = await ticketRes.json();
-            log("Respuesta recibida (JSON):");
-            log(JSON.stringify(data, null, 2), "#88d0ff");
+            const responseText = await ticketRes.text();
+            log("Respuesta del servidor recibida.");
 
-            // 3. VALIDACIÓN
-            if (data.status === "ok" || data.status === "OK") {
-                const info = data.item.externalTicketDataForPayment;
+            // Intentamos parsear tanto si viene en JSON como en XML
+            if (responseText.includes("<status>ok</status>") || responseText.includes('"status":"ok"')) {
+                // Extracción simple por texto para evitar errores de parseo
+                const montoMatch = responseText.match(/<amountToPay>(.*?)<\/amountToPay>/) || responseText.match(/"amountToPay":([\d.]+)/);
+                const monto = montoMatch ? (montoMatch[1].replace(/"/g, '')) : "No detectado";
+
                 statusDiv.className = "status-box success";
-                statusDiv.innerText = `ÉXITO: Q${info.amountToPay}`;
-                log(`\nMONTO FINAL: Q${info.amountToPay}`, "#ffff00");
+                statusDiv.innerText = `ÉXITO: Q${monto}`;
+                log(`\nMONTO FINAL A COBRAR: Q${monto}`, "#ffff00");
             } else {
                 statusDiv.className = "status-box error";
                 statusDiv.innerText = "ERROR EN TICKET";
-                log("El servidor reportó un error en el JSON.");
+                log("Servidor devolvió error. Respuesta completa:", "#ff4444");
+                log(responseText, "#88d0ff");
             }
 
         } catch (error) {
