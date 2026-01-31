@@ -60,7 +60,7 @@
         }
 
         .btn {
-            display: flex; /* Cambiado para alinear logo y texto */
+            display: flex; 
             align-items: center;
             justify-content: center;
             width: 100%;
@@ -76,7 +76,6 @@
             text-transform: uppercase;
         }
 
-        /* Ajuste de colores por los logos con fondo sólido */
         .btn-yappi {
             background-color: #ffffff; 
             color: var(--yappi-blue);
@@ -89,16 +88,14 @@
             border: 2px solid #10852d;
         }
 
-        /* NUEVO: Boton Wompi fondo blanco borde negro */
         .btn-wompi {
             background-color: #ffffff;
             color: #000000;
             border: 2px solid #000000;
         }
 
-        /* Estilo para los logos dentro de los botones */
         .btn img {
-            height: 30px; /* Tamaño ideal para que no deforme el botón */
+            height: 30px; 
             margin-right: 15px;
             border-radius: 5px;
         }
@@ -120,7 +117,7 @@
         
         <div id="ticketDisplay" class="ticket-box">Escaneando...</div>
 
-        <button class="btn btn-yappi" onclick="goYappi()">
+        <button id="btnYappy" class="btn btn-yappi" onclick="goYappi()">
             <img src="yappy_logo.png" alt="Yappi">  
         </button>
 
@@ -128,7 +125,7 @@
             <img src="j4pay_logo.png" alt="J4Pay">  
         </button>
 
-        <button class="btn btn-wompi" onclick="goWompi()">
+        <button id="btnWompi" class="btn btn-wompi" onclick="goWompi()">
             <img src="wompi_logo.png" alt="Wompi">  
         </button>
     </div>
@@ -140,10 +137,42 @@
     <script>
         const params = new URLSearchParams(window.location.search);
         const rawData = params.get('ticket') || 'SIN-DATA';
-        document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
+        
+        // Variables para guardar lo que responda el servidor
+        let montoFinal = 0;
+        let ticketLargo = "";
+
+        // Ejecutar consulta al cargar
+        if (rawData !== 'SIN-DATA') {
+            consultarJPass();
+        } else {
+            document.getElementById('ticketDisplay').innerText = "TICKET: NO DETECTADO";
+        }
+
+        async function consultarJPass() {
+            const proxy = "https://corsproxy.io/?";
+            const target = `https://eu-sandbox.j-pass.com/api/v1/installation/3569036549/ticket/${rawData}/cost`;
+
+            try {
+                const response = await fetch(proxy + encodeURIComponent(target));
+                const data = await response.json();
+
+                if (data.status === "ok") {
+                    montoFinal = data.item.cost;
+                    ticketLargo = data.item.value; // El ID real 49215...
+                    
+                    // Actualizamos el texto sin cambiar estilos
+                    document.getElementById('ticketDisplay').innerText = `TICKET: ${ticketLargo} | Q${montoFinal}`;
+                }
+            } catch (e) {
+                console.error("Error al obtener datos");
+                document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
+            }
+        }
 
         function goYappi() {
-            window.location.href = "https://pagos.yappy.com/checkout?ref=" + rawData;
+            // Se usa el ticket real y el monto obtenido
+            window.location.href = `https://pagos.yappy.com/checkout?ref=${ticketLargo}&amount=${montoFinal}`;
         }
 
         function goJ4() {
@@ -151,8 +180,7 @@
         }
 
         function goWompi() {
-            // Aquí irá el link de Wompi cuando lo tengamos
-            window.location.href = "https://pagos.wompi.com.gt/checkout?ref=" + rawData;
+            window.location.href = `https://pagos.wompi.com.gt/checkout?ref=${ticketLargo}&amount=${montoFinal}`;
         }
     </script>
 </body>
