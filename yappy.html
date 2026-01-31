@@ -19,6 +19,7 @@
         label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; color: #444; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; outline: none; }
         input:focus { border-color: var(--tas-red); }
+        input:disabled { background-color: #f0f0f0; cursor: not-allowed; border-color: #eee; }
         #yappy-container { margin-top: 25px; min-height: 50px; display: flex; flex-direction: column; align-items: center; }
         .btn-confirmar { background: var(--tas-green); color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; text-transform: uppercase; transition: 0.3s; }
         .btn-confirmar:hover { opacity: 0.9; transform: scale(1.02); }
@@ -37,13 +38,13 @@
         <div class="ticket-info"><strong>Ticket ID:</strong> <span id="ticket-id">Cargando...</span></div>
         
         <div class="form-group">
-            <label for="nit">NIT*</label>
+            <label for="nit">NIT <span id="nit-req">*</span></label>
             <input type="text" id="nit" placeholder="CF o NIT">
         </div>
         
         <div class="form-group">
-            <label for="email">Correo Electrónico*</label>
-            <input type="email" id="email" placeholder="abc@xyz.com" required>
+            <label for="email">Correo Electrónico <span id="email-req">*</span></label>
+            <input type="email" id="email" placeholder="abc@xyz.com">
         </div>
 
         <div id="yappy-container">
@@ -61,9 +62,10 @@
     let tariffIdGlobal = 10;
 
     function validarFormulario() {
+        if (parseFloat(montoGlobal) <= 0) return true;
+
         const nit = document.getElementById('nit').value.trim();
         const email = document.getElementById('email').value.trim();
-        
         const nitRegex = /^([0-9]+|[Cc][Ff])?$/;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -93,7 +95,6 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "getData", ticket: ticketParam.trim() })
             });
-            
             const resultText = await response.text();
 
             if (resultText.includes("<status>OK</status>")) {
@@ -103,7 +104,17 @@
 
                 montoDiv.innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
-                yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="procesarPago()">Confirmar y Pagar</button>`;
+
+                let textoBoton = "Confirmar y Pagar";
+                if (parseFloat(montoGlobal) <= 0) {
+                    document.getElementById('nit').disabled = true;
+                    document.getElementById('email').disabled = true;
+                    document.getElementById('nit-req').style.display = 'none';
+                    document.getElementById('email-req').style.display = 'none';
+                    textoBoton = "Confirmar Salida";
+                }
+
+                yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="procesarPago()">${textoBoton}</button>`;
             } else {
                 throw new Error("El servidor no reconoció el ticket.");
             }
@@ -117,10 +128,10 @@
 
         const container = document.getElementById('yappy-container');
         const nitInput = document.getElementById('nit').value.trim();
-        const email = document.getElementById('email').value;
+        const email = document.getElementById('email').value.trim();
         const nitParaEnvio = (nitInput === "") ? "CF" : nitInput;
 
-        container.innerHTML = "<div class='loading-spinner'>Aplicando pago...</div>";
+        container.innerHTML = "<div class='loading-spinner'>Procesando...</div>";
 
         try {
             const response = await fetch(WORKER_URL, {
@@ -138,14 +149,17 @@
             const data = await response.json(); 
 
             if (data.janusResponse.includes("<status>OK</status>")) {
-                container.innerHTML = "<b style='color:var(--tas-green); font-size:1.1rem;'>✓ PAGO EXITOSO. PUEDE SALIR.</b>";
+                // LÓGICA DE MENSAJE DINÁMICO
+                const esGratis = parseFloat(montoGlobal) <= 0;
+                const msgPrimario = esGratis ? "VALIDACIÓN EXITOSA" : "PAGO EXITOSO";
                 
-                // CONDICIÓN: Solo descarga si el monto es mayor a cero
-                if (parseFloat(montoGlobal) > 0) {
+                container.innerHTML = `<b style='color:var(--tas-green); font-size:1.1rem;'>✓ ${msgPrimario}. <br>PUEDE SALIR.</b>`;
+                
+                if (!esGratis) {
                     descargarFacturaLocal(data.nitFinal, email, data.uuidFactura);
                 }
             } else {
-                container.innerHTML = "<b style='color:orange'>Error Janus: El pago no se pudo aplicar.</b>";
+                container.innerHTML = "<b style='color:orange'>Error Janus: No se pudo validar.</b>";
             }
         } catch (error) {
             container.innerHTML = "<b style='color:red'>Error de comunicación con el Bridge.</b>";
@@ -162,7 +176,6 @@
             "uuid_transaccion": uuid,
             "fecha": new Date().toLocaleString('es-GT', { hour12: true })
         };
-        
         const blob = new Blob([JSON.stringify(datosFactura, null, 2)], {type:'application/json'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
