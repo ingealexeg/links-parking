@@ -139,55 +139,35 @@
     const rawData = params.get('ticket') || 'SIN-DATA';
     
     let montoFinal = 0;
-    let ticketLargo = "";
+    let ticketLargo = rawData; // Por defecto usamos el rawData que recibimos
 
-    // 1. Mostramos el ID temporalmente
+    // 1. Mostramos el ID en el cuadro gris
     document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
-    // 2. Creamos un túnel directo usando un iframe invisible
-    if (rawData !== 'SIN-DATA') {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none'; // Nadie lo ve
-        // Cargamos la URL que SÍ funciona en el navegador
-        iframe.src = `https://eu-sandbox.j-pass.com/api/v1/installation/3569036549/ticket/${rawData}/cost`;
-        document.body.appendChild(iframe);
-
-        // Intentamos leer el contenido cuando cargue
-        iframe.onload = async function() {
-            try {
-                // Esto intenta obtener el JSON que el navegador ya descargó
-                const response = iframe.contentDocument || iframe.contentWindow.document;
-                const bodyText = response.getElementsByTagName('pre')[0].innerHTML;
-                const data = JSON.parse(bodyText);
-
-                if (data.status === "ok") {
-                    montoFinal = data.item.cost;
-                    ticketLargo = data.item.value;
-                    document.getElementById('ticketDisplay').innerText = `TICKET: ${ticketLargo} | Q${montoFinal}`;
-                }
-            } catch (e) {
-                // Si el navegador bloquea la lectura por seguridad, usamos el plan de respaldo:
-                // Abrir J-Pass en una pestaña pequeña y que el usuario vea el precio ahí
-                console.log("Bloqueo de seguridad del navegador. El usuario debe usar J4Pay primero.");
-            }
-        };
+    // 2. Lógica de redirección para Yappy
+    function goYappi() {
+        // Cambia 'debug.html' por 'Yappy.html' cuando renombres tu archivo
+        const nombreArchivoDestino = "debug.html"; 
+        
+        if (rawData !== 'SIN-DATA') {
+            window.location.href = `${nombreArchivoDestino}?ticket=${rawData}`;
+        } else {
+            alert("No se detectó un ticket válido para procesar el pago.");
+        }
     }
-    
 
-        function goYappi() {
-            // Se usa el ticket real y el monto obtenido
-            window.location.href = `https://pagos.yappy.com/checkout?ref=${ticketLargo}&amount=${montoFinal}`;
-        }
+    // Funciones para los otros botones (se mantienen igual)
+    function goJ4() {
+        window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
+    }
 
-        function goJ4() {
-            window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
-        }
-
-        function goWompi() {
-            window.location.href = `https://pagos.wompi.com.gt/checkout?ref=${ticketLargo}&amount=${montoFinal}`;
-        }
-    </script>
+    function goWompi() {
+        // Enlace temporal o de respaldo para Wompi
+        window.location.href = `https://pagos.wompi.com.gt/checkout?ref=${rawData}&amount=${montoFinal}`;
+    }
+</script>
 </body>
 </html>
+
 
 
