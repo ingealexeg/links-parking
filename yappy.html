@@ -38,7 +38,7 @@
         
         <div class="form-group">
             <label for="nit">NIT*</label>
-            <input type="text" id="nit" placeholder="CF o NIT" inputmode="numeric" required>
+            <input type="text" id="nit" placeholder="CF o NIT">
         </div>
         
         <div class="form-group">
@@ -53,7 +53,6 @@
 </div>
 
 <script>
-    // URL de tu Cloudflare Worker
     const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
     const ticketParam = new URLSearchParams(window.location.search).get('ticket');
     
@@ -61,28 +60,25 @@
     let ticketRealGlobal = "";
     let tariffIdGlobal = 10;
 
-    // --- VALIDACIONES ---
     function validarFormulario() {
         const nit = document.getElementById('nit').value.trim();
         const email = document.getElementById('email').value.trim();
         
-        // Regex: Solo números para el NIT
-        const nitRegex = /^\d+$/;
-        // Regex: Estructura estándar de email
+        // Acepta números, las letras CF (case insensitive) o vacío
+        const nitRegex = /^([0-9]+|[Cc][Ff])?$/;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
         if (!nitRegex.test(nit)) {
-            alert("⚠️ El NIT debe contener únicamente números.");
+            alert("⚠️ El NIT debe ser numérico o 'CF'.");
             return false;
         }
         if (!emailRegex.test(email)) {
-            alert("⚠️ Formato de correo electrónico inválido (ejemplo: usuario@dominio.com).");
+            alert("⚠️ Formato de correo electrónico inválido.");
             return false;
         }
         return true;
     }
 
-    // --- INICIALIZACIÓN ---
     async function initPayment() {
         const montoDiv = document.getElementById('monto-display');
         const yappyContainer = document.getElementById('yappy-container');
@@ -96,10 +92,7 @@
             const response = await fetch(WORKER_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    action: "getData", 
-                    ticket: ticketParam.trim() 
-                })
+                body: JSON.stringify({ action: "getData", ticket: ticketParam.trim() })
             });
             
             const resultText = await response.text();
@@ -120,18 +113,19 @@
         }
     }
 
-    // --- PROCESO DE PAGO ---
     async function procesarPago() {
         if (!validarFormulario()) return;
 
         const container = document.getElementById('yappy-container');
-        const nit = document.getElementById('nit').value;
+        const nitInput = document.getElementById('nit').value.trim();
         const email = document.getElementById('email').value;
+
+        // Si está vacío, mandamos "CF" al worker
+        const nitParaEnvio = (nitInput === "") ? "CF" : nitInput;
 
         container.innerHTML = "<div class='loading-spinner'>Aplicando pago en Janus...</div>";
 
         try {
-            // Enviamos la instrucción al Worker
             const response = await fetch(WORKER_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -139,20 +133,19 @@
                     action: "applyPayment", 
                     ticket: ticketRealGlobal,
                     amount: montoGlobal,
-                    tariffId: tariffIdGlobal
+                    tariffId: tariffIdGlobal,
+                    nit: nitParaEnvio
                 })
             });
 
-            const data = await response.json(); // El Worker devuelve { janusResponse, uuidFactura }
+            const data = await response.json(); 
 
             if (data.janusResponse.includes("<status>OK</status>")) {
                 container.innerHTML = "<b style='color:var(--tas-green); font-size:1.1rem;'>✓ PAGO EXITOSO. PUEDE SALIR.</b>";
-                
-                // Descarga de factura usando el UUID generado por el Worker
-                descargarFacturaLocal(nit, email, data.uuidFactura);
+                // Usamos el nitFinal que devuelve el worker para la factura
+                descargarFacturaLocal(data.nitFinal, email, data.uuidFactura);
             } else {
                 container.innerHTML = "<b style='color:orange'>Error Janus: El pago no se pudo aplicar.</b>";
-                console.error("Detalle:", data.janusResponse);
             }
         } catch (error) {
             container.innerHTML = "<b style='color:red'>Error de comunicación con el Bridge.</b>";
@@ -161,13 +154,13 @@
 
     function descargarFacturaLocal(nit, email, uuid) {
         const datosFactura = {
-            emisor: "TAS Seguridad",
-            ticket: ticketRealGlobal,
-            monto: montoGlobal,
-            nit_cliente: nit,
-            email_cliente: email,
-            uuid_transaccion: uuid,
-            fecha: new Date().toLocaleString()
+            "emisor": "TAS Seguridad",
+            "ticket": ticketRealGlobal,
+            "monto": montoGlobal,
+            "nit_cliente": nit,
+            "email_cliente": email,
+            "uuid_transaccion": uuid,
+            "fecha": new Date().toLocaleString('es-GT', { hour12: true })
         };
         
         const blob = new Blob([JSON.stringify(datosFactura, null, 2)], {type:'application/json'});
