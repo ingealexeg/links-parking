@@ -10,54 +10,39 @@
         body { font-family: 'Montserrat', sans-serif; background-color: #f8f9fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .payment-card { background: white; width: 90%; max-width: 450px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
         .header { background: var(--dark); padding: 20px; text-align: center; border-bottom: 4px solid var(--tas-red); }
-        .header img { max-width: 150px; }
         .content { padding: 30px; }
         .amount-section { text-align: center; margin-bottom: 25px; }
         .amount-label { font-size: 0.9rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
         .amount-value { font-size: 2.5rem; font-weight: 700; color: var(--dark); margin: 5px 0; }
-        
         .ticket-info { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #888; margin-bottom: 25px; word-break: break-all; text-align: center; }
-        
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; color: #444; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 1rem; }
-        input:focus { outline: none; border-color: var(--tas-red); }
-
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
         #yappy-container { margin-top: 25px; min-height: 50px; display: flex; flex-direction: column; align-items: center; }
+        .btn-confirmar { background: var(--tas-green); color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; text-transform: uppercase; }
         .loading-spinner { color: var(--tas-red); font-weight: bold; }
-        
-        .btn-confirmar { background: var(--tas-green); color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; text-transform: uppercase; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="payment-card">
-    <div class="header">
-        <h2 style="color: white; margin: 0; font-size: 1.2rem;">Resumen de Pago</h2>
-    </div>
-
+    <div class="header"><h2 style="color: white; margin: 0; font-size: 1.2rem;">Resumen de Pago</h2></div>
     <div class="content" id="main-content">
         <div class="amount-section">
             <div class="amount-label">Total a Pagar</div>
             <div id="monto-display" class="amount-value">Q --.--</div>
         </div>
-
-        <div class="ticket-info">
-            <strong>Ticket ID:</strong> <span id="ticket-id">Cargando...</span>
-        </div>
-
+        <div class="ticket-info"><strong>Ticket ID:</strong> <span id="ticket-id">Cargando...</span></div>
         <div class="form-group">
             <label for="nit">NIT (Facturación)*</label>
-            <input type="text" id="nit" placeholder="CF o NIT del cliente" required>
+            <input type="text" id="nit" placeholder="CF o NIT" required>
         </div>
-
         <div class="form-group">
             <label for="email">Correo Electrónico*</label>
             <input type="email" id="email" placeholder="Para envío de factura" required>
         </div>
-
         <div id="yappy-container">
-            <div class="loading-spinner">Validando ticket con Janus...</div>
+            <div class="loading-spinner">Validando con Janus...</div>
         </div>
     </div>
 </div>
@@ -65,27 +50,15 @@
 <script>
     const API_BASE = "http://10.10.5.15:8080/janus-integration/api/ext";
     const ticketParam = new URLSearchParams(window.location.search).get('ticket');
-    
-    // Variables globales para el proceso de pago
-    let montoGlobal = 0;
-    let ticketRealGlobal = "";
-    let tokenGlobal = "";
+    let montoGlobal = 0, ticketRealGlobal = "", tokenGlobal = "";
 
     async function initPayment() {
         const montoDiv = document.getElementById('monto-display');
-        const ticketDiv = document.getElementById('ticket-id');
         const yappyContainer = document.getElementById('yappy-container');
-
-        if (!ticketParam) {
-            montoDiv.innerText = "ERROR";
-            yappyContainer.innerHTML = "<b style='color:red'>Ticket no encontrado</b>";
-            return;
-        }
-
-        ticketDiv.innerText = ticketParam;
+        if (!ticketParam) return;
 
         try {
-            // 1. Obtener Token
+            // 1. Login
             const login = await fetch(`${API_BASE}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -94,94 +67,47 @@
             const loginText = await login.text();
             tokenGlobal = loginText.match(/<value>(.*?)<\/value>/)[1];
 
-            // 2. Consultar Monto
-            const myHeaders = new Headers();
-            myHeaders.append("Janus-TP-Authorization", tokenGlobal);
-            myHeaders.append("Content-Type", "application/json");
-
+            // 2. Get Data
             const response = await fetch(`${API_BASE}/payment/get/ticketdata`, {
                 method: "POST",
-                headers: myHeaders,
-                body: JSON.stringify({
-                    "mediaTypeIdentifier": "barcode",
-                    "ticketIdentifier": ticketParam.trim()
-                })
+                headers: { "Janus-TP-Authorization": tokenGlobal, "Content-Type": "application/json" },
+                body: JSON.stringify({ "mediaTypeIdentifier": "barcode", "ticketIdentifier": ticketParam.trim() })
             });
-
             const result = await response.text();
 
             if (result.includes("<status>OK</status>")) {
                 montoGlobal = result.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
                 ticketRealGlobal = result.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
-                
                 montoDiv.innerText = `Q${montoGlobal}`;
-                
-                // Sustituimos el spinner por el botón de Yappy (simulado por ahora)
-                yappyContainer.innerHTML = `
-                    <div style='color:var(--tas-green); margin-bottom:10px;'>✓ Ticket Validado</div>
-                    <button class="btn-confirmar" onclick="simularPagoYappy()">Pagar con Yappy</button>
-                `;
-            } else {
-                throw new Error("Ticket no válido o ya pagado");
-            }
-
+                document.getElementById('ticket-id').innerText = ticketRealGlobal;
+                yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="simularPagoYappy()">Confirmar Pago</button>`;
+            } else { throw new Error("Ticket inválido"); }
         } catch (e) {
-            montoDiv.innerText = "ERROR";
-            yappyContainer.innerHTML = `<span style='color:red'>${e.message}</span>`;
+            yappyContainer.innerHTML = `<b style='color:red'>${e.message}</b>`;
         }
     }
-
-    // --- FLUJO POST-PAGO ---
 
     async function simularPagoYappy() {
         const nit = document.getElementById('nit').value;
         const email = document.getElementById('email').value;
+        if (!nit || !email) return alert("Complete los datos");
 
-        if (!nit || !email) {
-            alert("Por favor completa los datos de facturación.");
-            return;
-        }
+        const uuid = "FACT-" + Math.random().toString(36).substr(2, 9).toUpperCase();
+        // Descargamos el JSON de factura
+        const blob = new Blob([JSON.stringify({nit, email, monto: montoGlobal, ticket: ticketRealGlobal, uuid})], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Factura_${ticketRealGlobal}.json`; a.click();
 
-        // 1. SIMULACIÓN DE FACTURACIÓN (Generar archivo JSON)
-        const fakeUUID = "FACT-" + Math.random().toString(36).substr(2, 9).toUpperCase();
-        const datosFactura = {
-            nit: nit,
-            email: email,
-            monto: montoGlobal,
-            ticket_real: ticketRealGlobal,
-            ticket_encriptado: ticketParam,
-            uuid_factura: fakeUUID,
-            fecha: new Date().toLocaleString()
-        };
-
-        descargarJSON(datosFactura);
-
-        // 2. APLICAR PAGO EN JANUS (Lógica Apply que pasaste de Postman)
-        await aplicarPagoJanus(fakeUUID);
-    }
-
-    function descargarJSON(data) {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Factura_${ticketRealGlobal}.json`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
+        await aplicarPagoJanus(uuid);
     }
 
     async function aplicarPagoJanus(uuid) {
-        const yappyContainer = document.getElementById('yappy-container');
-        yappyContainer.innerHTML = "<div class='loading-spinner'>Aplicando pago en sistema...</div>";
+        const container = document.getElementById('yappy-container');
+        container.innerHTML = "<div class='loading-spinner'>Abriendo talanquera...</div>";
 
-        const myHeaders = new Headers();
-        myHeaders.append("Janus-TP-Authorization", tokenGlobal);
-        myHeaders.append("Content-Type", "application/json");
-
+        // ESTRUCTURA LIMPIA PARA JANUS
         const rawApply = JSON.stringify({
             "mediaTypeIdentifier": "barcode",
-            "ticketIdentifier": ticketRealGlobal, // Usamos el ID corto para el apply
+            "ticketIdentifier": ticketRealGlobal, // IMPORTANTE: Usar el ticket corto
             "externalPaymentInfo": {
                 "amountPaid": parseFloat(montoGlobal),
                 "externalTransactionId": uuid,
@@ -192,26 +118,22 @@
         try {
             const response = await fetch(`${API_BASE}/payment/apply`, {
                 method: "POST",
-                headers: myHeaders,
-                body: rawApply,
-                redirect: "follow"
+                headers: { "Janus-TP-Authorization": tokenGlobal, "Content-Type": "application/json" },
+                body: rawApply
             });
-            const result = await response.text();
+            const resText = await response.text();
             
-            if (result.includes("<status>OK</status>")) {
-                yappyContainer.innerHTML = "<b style='color:var(--tas-green); font-size:1.2rem;'>¡PAGO EXITOSO! PUEDE SALIR</b>";
-                alert("Pago aplicado correctamente. Su factura se ha descargado.");
+            if (resText.includes("<status>OK</status>")) {
+                container.innerHTML = "<b style='color:var(--tas-green)'>✓ PAGO EXITOSO. PUEDE SALIR.</b>";
             } else {
-                yappyContainer.innerHTML = "<b style='color:orange'>Pago recibido, pero error al abrir talanquera. Contacte a soporte.</b>";
-                console.log("Error Janus Apply:", result);
+                container.innerHTML = "<b style='color:orange'>Error Janus: Revise Logs de Servidor</b>";
             }
         } catch (error) {
-            yappyContainer.innerHTML = "<b style='color:red'>Error de conexión al aplicar pago</b>";
+            container.innerHTML = "<b style='color:red'>Error de red al aplicar pago</b>";
         }
     }
 
     window.onload = initPayment;
 </script>
-
 </body>
 </html>
