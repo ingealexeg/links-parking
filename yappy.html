@@ -10,7 +10,7 @@
         body { font-family: 'Montserrat', sans-serif; background-color: #f8f9fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .payment-card { background: white; width: 90%; max-width: 450px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
         .header { background: var(--dark); padding: 20px; text-align: center; border-bottom: 4px solid var(--tas-red); }
-        .header img { max-width: 150px; } /* Aquí iría tu logo */
+        .header img { max-width: 150px; }
         .content { padding: 30px; }
         .amount-section { text-align: center; margin-bottom: 25px; }
         .amount-label { font-size: 0.9rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
@@ -23,8 +23,10 @@
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 1rem; }
         input:focus { outline: none; border-color: var(--tas-red); }
 
-        #yappy-container { margin-top: 25px; min-height: 50px; display: flex; justify-content: center; }
+        #yappy-container { margin-top: 25px; min-height: 50px; display: flex; flex-direction: column; align-items: center; }
         .loading-spinner { color: var(--tas-red); font-weight: bold; }
+        
+        .btn-confirmar { background: var(--tas-green); color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; text-transform: uppercase; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -63,6 +65,11 @@
 <script>
     const API_BASE = "http://10.10.5.15:8080/janus-integration/api/ext";
     const ticketParam = new URLSearchParams(window.location.search).get('ticket');
+    
+    // Variables globales para el proceso de pago
+    let montoGlobal = 0;
+    let ticketRealGlobal = "";
+    let tokenGlobal = "";
 
     async function initPayment() {
         const montoDiv = document.getElementById('monto-display');
@@ -85,11 +92,11 @@
                 body: JSON.stringify({ "username": "TasGT25", "password": "Hub$2025" })
             });
             const loginText = await login.text();
-            const token = loginText.match(/<value>(.*?)<\/value>/)[1];
+            tokenGlobal = loginText.match(/<value>(.*?)<\/value>/)[1];
 
-            // 2. Consultar Monto (Usando la lógica de Postman que nos funcionó)
+            // 2. Consultar Monto
             const myHeaders = new Headers();
-            myHeaders.append("Janus-TP-Authorization", token);
+            myHeaders.append("Janus-TP-Authorization", tokenGlobal);
             myHeaders.append("Content-Type", "application/json");
 
             const response = await fetch(`${API_BASE}/payment/get/ticketdata`, {
@@ -104,12 +111,16 @@
             const result = await response.text();
 
             if (result.includes("<status>OK</status>")) {
-                const monto = result.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
-                montoDiv.innerText = `Q${monto}`;
+                montoGlobal = result.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
+                ticketRealGlobal = result.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
                 
-                // Aquí activaremos Yappy cuando me des la documentación
-                yappyContainer.innerHTML = "" +
-                                         "<div style='color:var(--tas-green)'>✓ Listo para pagar</div>";
+                montoDiv.innerText = `Q${montoGlobal}`;
+                
+                // Sustituimos el spinner por el botón de Yappy (simulado por ahora)
+                yappyContainer.innerHTML = `
+                    <div style='color:var(--tas-green); margin-bottom:10px;'>✓ Ticket Validado</div>
+                    <button class="btn-confirmar" onclick="simularPagoYappy()">Pagar con Yappy</button>
+                `;
             } else {
                 throw new Error("Ticket no válido o ya pagado");
             }
@@ -117,6 +128,85 @@
         } catch (e) {
             montoDiv.innerText = "ERROR";
             yappyContainer.innerHTML = `<span style='color:red'>${e.message}</span>`;
+        }
+    }
+
+    // --- FLUJO POST-PAGO ---
+
+    async function simularPagoYappy() {
+        const nit = document.getElementById('nit').value;
+        const email = document.getElementById('email').value;
+
+        if (!nit || !email) {
+            alert("Por favor completa los datos de facturación.");
+            return;
+        }
+
+        // 1. SIMULACIÓN DE FACTURACIÓN (Generar archivo JSON)
+        const fakeUUID = "FACT-" + Math.random().toString(36).substr(2, 9).toUpperCase();
+        const datosFactura = {
+            nit: nit,
+            email: email,
+            monto: montoGlobal,
+            ticket_real: ticketRealGlobal,
+            ticket_encriptado: ticketParam,
+            uuid_factura: fakeUUID,
+            fecha: new Date().toLocaleString()
+        };
+
+        descargarJSON(datosFactura);
+
+        // 2. APLICAR PAGO EN JANUS (Lógica Apply que pasaste de Postman)
+        await aplicarPagoJanus(fakeUUID);
+    }
+
+    function descargarJSON(data) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Factura_${ticketRealGlobal}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+
+    async function aplicarPagoJanus(uuid) {
+        const yappyContainer = document.getElementById('yappy-container');
+        yappyContainer.innerHTML = "<div class='loading-spinner'>Aplicando pago en sistema...</div>";
+
+        const myHeaders = new Headers();
+        myHeaders.append("Janus-TP-Authorization", tokenGlobal);
+        myHeaders.append("Content-Type", "application/json");
+
+        const rawApply = JSON.stringify({
+            "mediaTypeIdentifier": "barcode",
+            "ticketIdentifier": ticketRealGlobal, // Usamos el ID corto para el apply
+            "externalPaymentInfo": {
+                "amountPaid": parseFloat(montoGlobal),
+                "externalTransactionId": uuid,
+                "paymentDateTime": new Date().toISOString()
+            }
+        });
+
+        try {
+            const response = await fetch(`${API_BASE}/payment/apply`, {
+                method: "POST",
+                headers: myHeaders,
+                body: rawApply,
+                redirect: "follow"
+            });
+            const result = await response.text();
+            
+            if (result.includes("<status>OK</status>")) {
+                yappyContainer.innerHTML = "<b style='color:var(--tas-green); font-size:1.2rem;'>¡PAGO EXITOSO! PUEDE SALIR</b>";
+                alert("Pago aplicado correctamente. Su factura se ha descargado.");
+            } else {
+                yappyContainer.innerHTML = "<b style='color:orange'>Pago recibido, pero error al abrir talanquera. Contacte a soporte.</b>";
+                console.log("Error Janus Apply:", result);
+            }
+        } catch (error) {
+            yappyContainer.innerHTML = "<b style='color:red'>Error de conexión al aplicar pago</b>";
         }
     }
 
