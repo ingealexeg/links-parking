@@ -92,7 +92,8 @@
                 const data = await response.json();
                 if (data.status === "ALREADY_VALIDATED") {
                     montoDiv.innerText = "Q 0.00";
-                    document.getElementById('ticket-id').innerText = ticketRealGlobal;
+                    // CORRECCIÓN AQUÍ: Se usa el número de ticket real del JSON
+                    document.getElementById('ticket-id').innerText = data.realTicket; 
                     yappyContainer.innerHTML = `<div class="alert-info"><strong>TICKET YA VALIDADO</strong><br>Tiene <b>${data.remaining} minutos</b> para salir.</div>`;
                     document.getElementById('nit').disabled = true;
                     document.getElementById('email').disabled = true;
