@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAS | Janus Encrypted Debug</title>
+    <title>TAS | Janus Final Debug</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -25,8 +25,8 @@
 
         .debug-container {
             background: var(--white);
-            width: 90%;
-            max-width: 700px;
+            width: 95%;
+            max-width: 800px;
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -39,7 +39,7 @@
             border-radius: 5px;
             margin: 15px 0;
             font-weight: bold;
-            font-size: 0.9rem;
+            font-size: 1rem;
             text-align: center;
         }
 
@@ -48,131 +48,157 @@
         .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
         .console {
-            background: #231f20;
+            background: #1e1e1e;
             color: #00ff00;
-            padding: 15px;
+            padding: 20px;
             border-radius: 5px;
             font-family: 'Courier New', monospace;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             white-space: pre-wrap;
-            max-height: 400px;
+            max-height: 450px;
             overflow-y: auto;
             border: 1px solid #444;
+            line-height: 1.4;
         }
 
         .highlight { color: #ffcc00; font-weight: bold; }
+        .xml-log { color: #88d0ff; }
 
         .info-tag {
             font-size: 0.8rem;
             color: #666;
             margin-top: 15px;
             background: #eee;
-            padding: 10px;
+            padding: 12px;
             border-radius: 4px;
+            border-left: 4px solid var(--tas-red);
         }
     </style>
 </head>
 <body>
 
 <div class="debug-container">
-    <h2>TAS Bridge Debugger (Encrypted Mode)</h2>
+    <h2>TAS Bridge Debugger (Modo Postman)</h2>
     
-    <div id="statusIndicator" class="status-box waiting">Esperando ticket encriptado...</div>
+    <div id="statusIndicator" class="status-box waiting">Iniciando secuencia...</div>
     
-    <div id="debugConsole" class="console">Listo para procesar...</div>
+    <div id="debugConsole" class="console">Esperando ticket...</div>
 
     <div class="info-tag">
-        <strong>Uso:</strong> <code>debug.html?ticket=WvHFg6cChjWYBzgVqXYf...</code><br>
-        <strong>Destino:</strong> 10.10.5.15:8080 (Janus API)
+        <strong>Instrucciones:</strong> Asegúrate de estar usando Chrome con <code>--disable-web-security</code>. <br>
+        <strong>Parámetro actual:</strong> <span id="currentTicketLabel">Ninguno</span>
     </div>
 </div>
 
 <script>
+    // ==========================================
+    // CONFIGURACIÓN DE ACCESO (IDÉNTICO A POSTMAN)
+    // ==========================================
     const SERVER_URL = "http://10.10.5.15:8080/janus-integration/api/ext";
     const CREDENTIALS = { "username": "TasGT25", "password": "Hub$2025" };
+    // ==========================================
 
     const urlParams = new URLSearchParams(window.location.search);
-    const encryptedTicket = urlParams.get('ticket');
-
+    const ticketVariable = urlParams.get('ticket');
+    
     const consoleDiv = document.getElementById('debugConsole');
     const statusDiv = document.getElementById('statusIndicator');
+    const labelTicket = document.getElementById('currentTicketLabel');
 
     function log(msg, type = 'normal') {
         const timestamp = new Date().toLocaleTimeString();
-        let formattedMsg = msg;
-        if (type === 'warn') formattedMsg = `<span class="highlight">${msg}</span>`;
-        consoleDiv.innerHTML += `\n[${timestamp}] > ${formattedMsg}`;
+        let content = msg;
+        if (type === 'warn') content = `<span class="highlight">${msg}</span>`;
+        if (type === 'xml') content = `<span class="xml-log">${msg}</span>`;
+        
+        consoleDiv.innerHTML += `\n[${timestamp}] > ${content}`;
         consoleDiv.scrollTop = consoleDiv.scrollHeight;
     }
 
-    async function ejecutarFlujo() {
-        if (!encryptedTicket) {
+    async function ejecutarBridge() {
+        if (!ticketVariable) {
             statusDiv.className = "status-box error";
-            statusDiv.innerText = "ERROR: TICKET ENCRIPTADO NO ENCONTRADO";
-            log("Por favor, usa la URL con el parámetro: ?ticket=CÓDIGO_LARGO", "warn");
+            statusDiv.innerText = "FALTA TICKET EN URL";
+            log("Error: No hay ticket. Usa ?ticket=VALOR", "warn");
             return;
         }
 
-        log(`Procesando ticket encriptado: ${encryptedTicket.substring(0, 15)}...`, "warn");
+        labelTicket.innerText = ticketVariable;
+        log(`Iniciando proceso para ticket: ${ticketVariable.substring(0,20)}...`, "warn");
 
         try {
-            // 1. LOGIN
-            log("Paso 1: Obteniendo token de acceso...");
+            // PASO 1: LOGIN (OBTENER TOKEN)
+            log("Paso 1: Solicitando Login...");
             const loginRes = await fetch(`${SERVER_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(CREDENTIALS)
             });
 
+            if (!loginRes.ok) throw new Error(`Fallo en Login: ${loginRes.status}`);
+
             const loginXml = await loginRes.text();
             const tokenMatch = loginXml.match(/<token>.*?<value>(.*?)<\/value>.*?<\/token>/);
             
-            if (!tokenMatch) throw new Error("No se pudo obtener el token dinámico.");
+            if (!tokenMatch) throw new Error("No se encontró token en la respuesta del servidor.");
             const token = tokenMatch[1];
-            log("Token recibido y validado.");
+            log("Token de sesión obtenido correctamente.");
 
-            // 2. CONSULTA CON TICKET ENCRIPTADO
-            log("Paso 2: Consultando costo con ticket encriptado...");
+            // PASO 2: CONSULTA DE TICKET (ESTILO POSTMAN)
+            log("Paso 2: Enviando consulta a /payment/get/ticketdata...");
             const ticketRes = await fetch(`${SERVER_URL}/payment/get/ticketdata`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json, text/plain, */*',
                     'Janus-TP-Authorization': token
                 },
                 body: JSON.stringify({
-                    "mediaTypeIdentifier": "barcode", // Ajustar si Júpiter pide otro tipo para encriptados
-                    "ticketIdentifier": encryptedTicket
+                    "mediaTypeIdentifier": "barcode",
+                    "ticketIdentifier": ticketVariable.trim()
                 })
             });
 
             const ticketXml = await ticketRes.text();
-            
-            // 3. PROCESAR RESPUESTA
-            const montoMatch = ticketXml.match(/<amountToPay>(.*?)<\/amountToPay>/);
-            const monto = montoMatch ? montoMatch[1] : "No disponible";
-            
-            // Si el XML trae el ID real (desencriptado), lo buscamos
-            const ticketRealMatch = ticketXml.match(/<ticketNumber>(.*?)<\/ticketNumber>/);
-            const ticketReal = ticketRealMatch ? ticketRealMatch[1] : "N/A";
+            log("Respuesta recibida del servidor.");
 
-            statusDiv.className = "status-box success";
-            statusDiv.innerText = `COSTO ENCONTRADO: Q${monto}`;
-            
-            log("-----------------------------------------");
-            log(`TICKET REAL: ${ticketReal}`, "warn");
-            log(`MONTO A COBRAR: Q${monto}`, "warn");
-            log("-----------------------------------------");
-            log("Respuesta XML completa:");
-            log(ticketXml.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+            // PASO 3: PARSEO DE RESULTADOS
+            const statusMatch = ticketXml.match(/<status>(.*?)<\/status>/);
+            const isOk = statusMatch && statusMatch[1] === "OK";
+
+            if (isOk) {
+                const montoMatch = ticketXml.match(/<amountToPay>(.*?)<\/amountToPay>/);
+                const realIdMatch = ticketXml.match(/<ticketNumber>(.*?)<\/ticketNumber>/);
+                
+                const monto = montoMatch ? montoMatch[1] : "0.00";
+                const realId = realIdMatch ? realIdMatch[1] : "Desconocido";
+
+                statusDiv.className = "status-box success";
+                statusDiv.innerText = `COSTO ENCONTRADO: Q${monto}`;
+                
+                log("---------------------------------------");
+                log(`RESULTADO EXITOSO`, "warn");
+                log(`TICKET REAL: ${realId}`);
+                log(`MONTO A PAGAR: Q${monto}`, "warn");
+                log("---------------------------------------");
+            } else {
+                statusDiv.className = "status-box error";
+                statusDiv.innerText = "ERROR EN DATOS DEL TICKET";
+                log("El servidor devolvió un error en el XML.", "warn");
+            }
+
+            log("Detalle XML del servidor:", "xml");
+            log(ticketXml.replace(/</g, "&lt;").replace(/>/g, "&gt;"), "xml");
 
         } catch (error) {
             statusDiv.className = "status-box error";
-            statusDiv.innerText = "ERROR EN EL BRIDGE";
-            log(`DETALLE: ${error.message}`);
+            statusDiv.innerText = "ERROR DE RED / CORS";
+            log(`CRÍTICO: ${error.message}`);
+            log("Revisa si Chrome está en modo --disable-web-security", "warn");
         }
     }
 
-    window.onload = ejecutarFlujo;
+    window.onload = ejecutarBridge;
 </script>
 
 </body>
