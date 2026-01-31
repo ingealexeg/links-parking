@@ -44,7 +44,7 @@
         
         <div class="form-group">
             <label for="email">Correo Electrónico <span id="email-req">*</span></label>
-            <input type="email" id="email" placeholder="abc@xyz.com">
+            <input type="email" id="email" placeholder="usuario@dominio.com">
         </div>
 
         <div id="yappy-container">
@@ -105,13 +105,13 @@
                 montoDiv.innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
 
-                let textoBoton = "Confirmar y Pagar";
+                let textoBoton = "Pagar ticket";
                 if (parseFloat(montoGlobal) <= 0) {
                     document.getElementById('nit').disabled = true;
                     document.getElementById('email').disabled = true;
                     document.getElementById('nit-req').style.display = 'none';
                     document.getElementById('email-req').style.display = 'none';
-                    textoBoton = "Confirmar Salida";
+                    textoBoton = "Validar ticket";
                 }
 
                 yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="procesarPago()">${textoBoton}</button>`;
