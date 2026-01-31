@@ -2,116 +2,39 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAS | Janus Final Debug</title>
+    <title>TAS | Janus JSON Debug</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --tas-red: #e31e24;
-            --tas-dark: #231f20;
-            --tas-bg: #f4f4f4;
-            --white: #ffffff;
-        }
-
-        body {
-            font-family: 'Montserrat', sans-serif;
-            background-color: var(--tas-bg);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        .debug-container {
-            background: var(--white);
-            width: 95%;
-            max-width: 800px;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
+        :root { --tas-red: #e31e24; --tas-dark: #231f20; --white: #ffffff; }
+        body { font-family: 'Montserrat', sans-serif; background: #f4f4f4; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .debug-container { background: var(--white); width: 95%; max-width: 700px; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h2 { color: var(--tas-dark); border-bottom: 3px solid var(--tas-red); padding-bottom: 10px; margin-top: 0; }
-
-        .status-box {
-            padding: 15px;
-            border-radius: 5px;
-            margin: 15px 0;
-            font-weight: bold;
-            font-size: 1rem;
-            text-align: center;
-        }
-
-        .waiting { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-
-        .console {
-            background: #1e1e1e;
-            color: #00ff00;
-            padding: 20px;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            white-space: pre-wrap;
-            max-height: 450px;
-            overflow-y: auto;
-            border: 1px solid #444;
-            line-height: 1.4;
-        }
-
-        .highlight { color: #ffcc00; font-weight: bold; }
-        .xml-log { color: #88d0ff; }
-
-        .info-tag {
-            font-size: 0.8rem;
-            color: #666;
-            margin-top: 15px;
-            background: #eee;
-            padding: 12px;
-            border-radius: 4px;
-            border-left: 4px solid var(--tas-red);
-        }
+        .status-box { padding: 15px; border-radius: 5px; margin: 15px 0; font-weight: bold; text-align: center; }
+        .waiting { background: #fff3cd; color: #856404; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .console { background: #1e1e1e; color: #00ff00; padding: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <div class="debug-container">
-    <h2>TAS Bridge Debugger (Modo Postman)</h2>
-    
-    <div id="statusIndicator" class="status-box waiting">Iniciando secuencia...</div>
-    
-    <div id="debugConsole" class="console">Esperando ticket...</div>
-
-    <div class="info-tag">
-        <strong>Instrucciones:</strong> Asegúrate de estar usando Chrome con <code>--disable-web-security</code>. <br>
-        <strong>Parámetro actual:</strong> <span id="currentTicketLabel">Ninguno</span>
-    </div>
+    <h2>TAS Bridge Debugger (JSON Mode)</h2>
+    <div id="statusIndicator" class="status-box waiting">Procesando...</div>
+    <div id="debugConsole" class="console">Iniciando...</div>
 </div>
 
 <script>
-    // ==========================================
-    // CONFIGURACIÓN DE ACCESO (IDÉNTICO A POSTMAN)
-    // ==========================================
     const SERVER_URL = "http://10.10.5.15:8080/janus-integration/api/ext";
     const CREDENTIALS = { "username": "TasGT25", "password": "Hub$2025" };
-    // ==========================================
-
     const urlParams = new URLSearchParams(window.location.search);
     const ticketVariable = urlParams.get('ticket');
-    
+
     const consoleDiv = document.getElementById('debugConsole');
     const statusDiv = document.getElementById('statusIndicator');
-    const labelTicket = document.getElementById('currentTicketLabel');
 
-    function log(msg, type = 'normal') {
-        const timestamp = new Date().toLocaleTimeString();
-        let content = msg;
-        if (type === 'warn') content = `<span class="highlight">${msg}</span>`;
-        if (type === 'xml') content = `<span class="xml-log">${msg}</span>`;
-        
-        consoleDiv.innerHTML += `\n[${timestamp}] > ${content}`;
+    function log(msg, color = "#00ff00") {
+        consoleDiv.innerHTML += `\n<span style="color:${color}">> ${msg}</span>`;
         consoleDiv.scrollTop = consoleDiv.scrollHeight;
     }
 
@@ -119,38 +42,31 @@
         if (!ticketVariable) {
             statusDiv.className = "status-box error";
             statusDiv.innerText = "FALTA TICKET EN URL";
-            log("Error: No hay ticket. Usa ?ticket=VALOR", "warn");
             return;
         }
 
-        labelTicket.innerText = ticketVariable;
-        log(`Iniciando proceso para ticket: ${ticketVariable.substring(0,20)}...`, "warn");
-
         try {
-            // PASO 1: LOGIN (OBTENER TOKEN)
-            log("Paso 1: Solicitando Login...");
+            // 1. LOGIN (Tratamos la respuesta como texto porque Janus mezcla formatos)
+            log("Paso 1: Login...");
             const loginRes = await fetch(`${SERVER_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(CREDENTIALS)
             });
-
-            if (!loginRes.ok) throw new Error(`Fallo en Login: ${loginRes.status}`);
-
-            const loginXml = await loginRes.text();
-            const tokenMatch = loginXml.match(/<token>.*?<value>(.*?)<\/value>.*?<\/token>/);
+            const loginRaw = await loginRes.text();
+            const tokenMatch = loginRaw.match(/<token>.*?<value>(.*?)<\/value>.*?<\/token>/);
             
-            if (!tokenMatch) throw new Error("No se encontró token en la respuesta del servidor.");
+            if (!tokenMatch) throw new Error("No se obtuvo token.");
             const token = tokenMatch[1];
-            log("Token de sesión obtenido correctamente.");
+            log("Token obtenido.");
 
-            // PASO 2: CONSULTA DE TICKET (ESTILO POSTMAN)
-            log("Paso 2: Enviando consulta a /payment/get/ticketdata...");
+            // 2. CONSULTA (Aquí el servidor nos responde en JSON según tu imagen)
+            log("Paso 2: Consultando ticket...");
             const ticketRes = await fetch(`${SERVER_URL}/payment/get/ticketdata`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json, text/plain, */*',
+                    'Accept': 'application/json',
                     'Janus-TP-Authorization': token
                 },
                 body: JSON.stringify({
@@ -159,47 +75,31 @@
                 })
             });
 
-            const ticketXml = await ticketRes.text();
-            log("Respuesta recibida del servidor.");
+            // Parseamos como JSON directamente
+            const data = await ticketRes.json();
+            log("Respuesta recibida (JSON):");
+            log(JSON.stringify(data, null, 2), "#88d0ff");
 
-            // PASO 3: PARSEO DE RESULTADOS
-            const statusMatch = ticketXml.match(/<status>(.*?)<\/status>/);
-            const isOk = statusMatch && statusMatch[1] === "OK";
-
-            if (isOk) {
-                const montoMatch = ticketXml.match(/<amountToPay>(.*?)<\/amountToPay>/);
-                const realIdMatch = ticketXml.match(/<ticketNumber>(.*?)<\/ticketNumber>/);
-                
-                const monto = montoMatch ? montoMatch[1] : "0.00";
-                const realId = realIdMatch ? realIdMatch[1] : "Desconocido";
-
+            // 3. VALIDACIÓN
+            if (data.status === "ok" || data.status === "OK") {
+                const info = data.item.externalTicketDataForPayment;
                 statusDiv.className = "status-box success";
-                statusDiv.innerText = `COSTO ENCONTRADO: Q${monto}`;
-                
-                log("---------------------------------------");
-                log(`RESULTADO EXITOSO`, "warn");
-                log(`TICKET REAL: ${realId}`);
-                log(`MONTO A PAGAR: Q${monto}`, "warn");
-                log("---------------------------------------");
+                statusDiv.innerText = `ÉXITO: Q${info.amountToPay}`;
+                log(`\nMONTO FINAL: Q${info.amountToPay}`, "#ffff00");
             } else {
                 statusDiv.className = "status-box error";
-                statusDiv.innerText = "ERROR EN DATOS DEL TICKET";
-                log("El servidor devolvió un error en el XML.", "warn");
+                statusDiv.innerText = "ERROR EN TICKET";
+                log("El servidor reportó un error en el JSON.");
             }
-
-            log("Detalle XML del servidor:", "xml");
-            log(ticketXml.replace(/</g, "&lt;").replace(/>/g, "&gt;"), "xml");
 
         } catch (error) {
             statusDiv.className = "status-box error";
-            statusDiv.innerText = "ERROR DE RED / CORS";
-            log(`CRÍTICO: ${error.message}`);
-            log("Revisa si Chrome está en modo --disable-web-security", "warn");
+            statusDiv.innerText = "FALLO DE CONEXIÓN";
+            log("ERROR: " + error.message, "#ff4444");
         }
     }
 
     window.onload = ejecutarBridge;
 </script>
-
 </body>
 </html>
