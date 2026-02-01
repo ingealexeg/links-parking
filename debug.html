@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAS | Debug Yappy</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
+    <style>
+        :root { --tas-red: #e88d43; --tas-green: #28a745; --dark: #1f95f0; }
+        body { font-family: 'Montserrat', sans-serif; background-color: #f8f9fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .payment-card { background: white; width: 90%; max-width: 450px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: var(--dark); padding: 20px; text-align: center; border-bottom: 4px solid var(--tas-red); }
+        .content { padding: 30px; }
+        .amount-section { text-align: center; margin-bottom: 25px; }
+        .amount-label { font-size: 0.9rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+        .amount-value { font-size: 2.5rem; font-weight: 700; color: var(--dark); margin: 5px 0; }
+        .ticket-info { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #888; margin-bottom: 25px; word-break: break-all; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; color: #444; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; outline: none; }
+        input:focus { border-color: var(--tas-red); }
+        input:disabled { background-color: #f0f0f0; cursor: not-allowed; border-color: #eee; }
+        #yappy-container { margin-top: 25px; min-height: 70px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .loading-spinner { color: var(--tas-red); font-weight: bold; text-align: center; }
+        .alert-info { background:#d4edda; color:#155724; padding:15px; border-radius:8px; text-align:center; border:1px solid #c3e6cb; font-size: 0.9rem; }
+        .success-view { text-align: center; padding: 20px 0; }
+        .success-icon { font-size: 4rem; color: var(--tas-green); margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="payment-card">
+    <div class="header" id="card-header"><h2 id="header-title" style="color: white; margin: 0; font-size: 1.2rem;">Detalle de Pago</h2></div>
+    <div class="content" id="main-content">
+        <div id="payment-ui">
+            <div class="amount-section">
+                <div class="amount-label">Total a Pagar</div>
+                <div id="monto-display" class="amount-value">Q --.--</div>
+            </div>
+            <div class="ticket-info"><strong>Ticket ID:</strong> <span id="ticket-id">Cargando...</span></div>
+            
+            <div class="form-group">
+                <label for="nit">NIT <span id="nit-req">*</span></label>
+                <input type="text" id="nit" placeholder="CF o NIT" oninput="escucharCambiosFormulario()">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Correo Electrónico <span id="email-req">*</span></label>
+                <input type="email" id="email" placeholder="usuario@dominio.com" oninput="escucharCambiosFormulario()">
+            </div>
+
+            <div id="yappy-container">
+                <div class="loading-spinner">Sincronizando...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
+    const urlParams = new URLSearchParams(window.location.search);
+    const ticketParam = urlParams.get('ticket');
+    const statusParam = urlParams.get('status');
+    
+    const PORCENTAJE_TAX = 0.12; 
+
+    let montoGlobal = 0;
+    let ticketRealGlobal = "";
+    let tariffIdGlobal = 10;
+
+    // --- NUEVA FUNCIÓN DE VALIDACIÓN EN TIEMPO REAL ---
+    function escucharCambiosFormulario() {
+        const btnYappy = document.getElementById('btn-yappy-main');
+        if (!btnYappy) return;
+
+        const nit = document.getElementById('nit').value.trim();
+        const email = document.getElementById('email').value.trim();
+        
+        const nitRegex = /^([0-9]+|[Cc][Ff])$/;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        const esValido = nitRegex.test(nit) && emailRegex.test(email);
+        
+        // Actualizamos el atributo del web-component de Yappy
+        btnYappy.setAttribute('is-disabled', !esValido);
+    }
+
+    async function init() {
+        if (statusParam === 'fail') alert("❌ Pago no completado.");
+        if (statusParam === 'success') {
+            document.getElementById('yappy-container').innerHTML = "<div class='loading-spinner'>Pago confirmado. Liberando...</div>";
+            procesarLiberacionFinal();
+            return;
+        }
+        cargarDatosTicket();
+    }
+
+    async function cargarDatosTicket() {
+        const yappyContainer = document.getElementById('yappy-container');
+        if (!ticketParam) { yappyContainer.innerHTML = "<b style='color:red'>Ticket no detectado</b>"; return; }
+
+        try {
+            const response = await fetch(WORKER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "getData", ticket: ticketParam.trim() })
+            });
+
+            const resultText = await response.text();
+            if (resultText.includes("<status>OK</status>")) {
+                montoGlobal = resultText.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
+                ticketRealGlobal = resultText.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
+                tariffIdGlobal = resultText.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
+
+                document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
+                document.getElementById('ticket-id').innerText = ticketRealGlobal;
+
+                if (parseFloat(montoGlobal) <= 0) {
+                    yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="procesarLiberacionFinal()">Validar ticket</button>`;
+                } else {
+                    // Renderizamos el botón de Yappy inicialmente DESHABILITADO
+                    yappyContainer.innerHTML = `
+                        <yappy-button id="btn-yappy-main" mode="button" color="brand" is-disabled="true"></yappy-button>
+                    `;
+                    document.getElementById('btn-yappy-main').addEventListener('yappy-clicked', iniciarFlujoYappy);
+                }
+            }
+        } catch (e) {
+            yappyContainer.innerHTML = `<b style='color:red'>Error al cargar ticket</b>`;
+        }
+    }
+
+    async function iniciarFlujoYappy() {
+        // Doble check por seguridad
+        const nit = document.getElementById('nit').value;
+        const email = document.getElementById('email').value;
+
+        const container = document.getElementById('yappy-container');
+        container.innerHTML = "<div class='loading-spinner'>Generando orden...</div>";
+
+        const montoTotal = parseFloat(montoGlobal);
+        const tax = (montoTotal * PORCENTAJE_TAX).toFixed(2);
+        const subtotal = (montoTotal - tax).toFixed(2);
+
+        try {
+            const response = await fetch(WORKER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    action: "createYappyPayment", 
+                    ticket: ticketRealGlobal,
+                    amount: montoTotal,
+                    subtotal: subtotal,
+                    tax: tax
+                })
+            });
+
+            const data = await response.json();
+            if (data.success && data.url) {
+                localStorage.setItem('temp_nit', nit);
+                localStorage.setItem('temp_email', email);
+                window.location.href = data.url;
+            } else {
+                alert("Error Yappy: " + data.message);
+                cargarDatosTicket();
+            }
+        } catch (e) { alert("Error de red."); }
+    }
+
+    async function procesarLiberacionFinal() {
+        const nit = localStorage.getItem('temp_nit') || document.getElementById('nit').value || "CF";
+        const email = localStorage.getItem('temp_email') || document.getElementById('email').value || "";
+
+        try {
+            const response = await fetch(WORKER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    action: "applyPayment", 
+                    ticket: ticketParam, 
+                    amount: montoGlobal, 
+                    tariffId: tariffIdGlobal, 
+                    nit: nit 
+                })
+            });
+
+            const data = await response.json();
+            if (data.janusResponse.includes("<status>OK</status>")) {
+                if (parseFloat(montoGlobal) > 0) descargarFacturaLocal(data.nitFinal, email, data.uuidFactura);
+                
+                const updateRes = await fetch(WORKER_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "getData", ticket: ticketParam })
+                });
+                const resText = await updateRes.text();
+                const tiempoFinal = resText.match(/<freeExit>(.*?)<\/freeExit>/)?.[1] || "15";
+                
+                mostrarExito("PAGO EXITOSO", ticketParam, tiempoFinal);
+            }
+        } catch (e) { alert("Error en liberación."); }
+    }
+
+    function mostrarExito(titulo, ticketId, tiempoSalida) {
+        document.getElementById('header-title').innerText = titulo;
+        document.getElementById('main-content').innerHTML = `
+            <div class="success-view">
+                <div class="success-icon">✓</div>
+                <h3 style="color: var(--dark); margin-bottom: 5px;">TICKET VALIDADO</h3>
+                <p style="font-weight: bold; font-size: 1.1rem; color: #444;">ID: ${ticketId}</p>
+                <div class="alert-info" style="margin-top: 20px;">
+                    Tiene <b>${tiempoSalida} minutos</b> para salir.
+                </div>
+            </div>
+        `;
+    }
+
+    function descargarFacturaLocal(nit, email, uuid) {
+        const datosFactura = { "ticket": ticketParam, "monto": montoGlobal, "nit": nit, "email": email, "uuid": uuid };
+        const blob = new Blob([JSON.stringify(datosFactura, null, 2)], {type:'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Factura_${ticketParam}.json`;
+        a.click();
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
