@@ -22,17 +22,18 @@
         label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
         input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
 
-        /* Contenedor del Botón Yappy - CORREGIDO PARA NO DESBORDAR */
+        /* Contenedor del Botón Yappy - Ajustado para que no se salga */
         #yappy-container { 
             margin-top: 25px; 
             width: 100%;
             display: flex;
             justify-content: center;
+            overflow: hidden; /* Evita cualquier desborde visual */
         }
-        /* Forzamos al componente a ser responsivo y no salirse */
+        
         btn-yappy { 
             width: 100% !important; 
-            max-width: 320px; 
+            max-width: 300px; /* Ancho controlado */
             display: block;
         }
 
@@ -138,8 +139,8 @@
         if (parseFloat(montoGlobal) <= 0) {
             container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; max-width:280px; padding:16px; border-radius:12px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer; font-size:1rem;">VALIDAR GRATIS</button>`;
         } else {
-            // Usamos theme "sky" y quitamos el rounded para que sea un rectángulo estéticamente superior
-            container.innerHTML = `<btn-yappy theme="sky" is-disabled="true"></btn-yappy>`;
+            // Se restaura rounded="true" para recuperar el borde redondeado profesional
+            container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
             const btn = document.querySelector('btn-yappy');
             
             btn.addEventListener("eventClick", async () => {
