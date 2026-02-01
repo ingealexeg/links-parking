@@ -7,34 +7,31 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <script type="module" src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
     <style>
-        :root { --tas-blue: #1f95f0; --tas-accent: #e88d43; --tas-green: #28a745; --tas-light-green: #e6f6f0; }
+        :root { --tas-blue: #1f95f0; --tas-accent: #e88d43; --tas-green: #28a745; --tas-light-green: #e9f5f0; }
         body { font-family: 'Montserrat', sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .card { background: white; width: 92%; max-width: 400px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; }
-        .header { background: var(--tas-blue); padding: 18px; text-align: center; color: white; border-bottom: 3px solid var(--tas-accent); }
-        .header h2 { margin: 0; font-size: 1.1rem; letter-spacing: 1px; text-transform: uppercase; }
-        .content { padding: 30px 25px; text-align: center; }
+        .card { background: white; width: 92%; max-width: 400px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; text-align: center; }
+        .header { background: var(--tas-blue); padding: 20px; color: white; border-bottom: 4px solid var(--tas-accent); }
+        .header h2 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
+        .content { padding: 35px 25px; }
         
-        /* Estilos de Monto y Ticket */
-        .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        /* Vista de Pago */
+        .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px; }
         .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 20px; }
-        .ticket-id-box { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.85rem; color: #666; margin-bottom: 25px; font-weight: 400; }
-        
-        /* Estilos de Formulario */
-        .form-group { text-align: left; margin-bottom: 18px; }
-        label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 6px; }
-        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; outline: none; font-family: inherit; font-size: 1rem; }
-        input:focus { border-color: var(--tas-blue); }
+        .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 25px; }
+        .form-group { text-align: left; margin-bottom: 15px; }
+        label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
+        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; }
 
-        /* Estilos de Éxito (Igual a tu imagen) */
-        .check-icon { color: var(--tas-green); font-size: 4rem; margin-bottom: 10px; }
-        .status-title { color: var(--tas-blue); font-weight: 700; font-size: 1.2rem; margin-bottom: 15px; text-transform: uppercase; }
-        .ticket-final { font-weight: 700; color: #333; margin-bottom: 20px; display: block; }
-        .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 15px; border-radius: 12px; border: 1px solid #c3e6cb; margin-bottom: 25px; font-size: 0.95rem; line-height: 1.4; }
-        .footer-thanks { color: #999; font-size: 0.85rem; font-weight: 400; }
+        /* Vista de Éxito / Ya Validado */
+        .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 10px; display: block; }
+        .status-msg { color: var(--tas-blue); font-weight: 700; font-size: 1.3rem; margin-bottom: 15px; text-transform: uppercase; }
+        .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
+        .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
+        .footer-thanks { color: #aaa; font-size: 0.85rem; }
 
-        #yappy-container { margin-top: 25px; min-height: 50px; }
-        .error-msg { color: #d9534f; font-weight: 600; font-size: 0.9rem; margin-top: 15px; }
+        #yappy-container { margin-top: 20px; min-height: 60px; }
         .loading { color: var(--tas-accent); font-weight: 600; padding: 20px; }
+        .error-msg { color: #dc3545; font-weight: 600; margin-top: 15px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -52,11 +49,11 @@
             
             <div class="form-group">
                 <label>NIT *</label>
-                <input type="text" id="nit" placeholder="CF o NIT" oninput="validarFormulario()">
+                <input type="text" id="nit" placeholder="CF o NIT" oninput="validar()">
             </div>
             <div class="form-group">
                 <label>Correo Electrónico *</label>
-                <input type="email" id="email" placeholder="usuario@dominio.com" oninput="validarFormulario()">
+                <input type="email" id="email" placeholder="usuario@dominio.com" oninput="validar()">
             </div>
             
             <div id="yappy-container"></div>
@@ -64,12 +61,12 @@
         </div>
 
         <div id="success-view" style="display:none;">
-            <div class="check-icon">✓</div>
-            <div class="status-title">Ticket Validado</div>
+            <span class="check-icon">✓</span>
+            <div class="status-msg">Ticket Validado</div>
             <span class="ticket-final" id="ticket-final-id">ID: ---</span>
             
-            <div class="time-box">
-                Tiene <b id="mins-val">--</b> minutos para salir de las instalaciones.
+            <div class="time-box" id="time-message">
+                Tiene <b id="mins-qty">--</b> <b id="mins-word">minutos</b> para salir de las instalaciones.
             </div>
             
             <div class="footer-thanks">¡Gracias por su visita!</div>
@@ -87,53 +84,50 @@
 
     async function init() {
         if (!ticketParam) {
-            showError("Parámetro 'ticket' ausente en la URL.");
+            showError("Falta el ticket en la URL.");
             return;
         }
 
         try {
             const res = await fetch(WORKER_URL, { 
                 method: "POST", 
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "getData", ticket: ticketParam }) 
             });
 
-            const responseText = await res.text();
+            const text = await res.text();
             document.getElementById('loading-view').style.display = 'none';
 
-            // 1. Verificar si es JSON (Ticket ya validado)
-            if (responseText.trim().startsWith('{')) {
-                const data = JSON.parse(responseText);
+            // CASO: TICKET YA VALIDADO (JSON)
+            if (text.trim().startsWith('{')) {
+                const data = JSON.parse(text);
                 if (data.status === "ALREADY_VALIDATED") {
-                    showSuccessView(data.realTicket, data.remaining, "TICKET VALIDADO");
+                    showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
                     return;
                 }
             }
 
-            // 2. Verificar si es XML (Ticket pendiente de pago)
-            if (responseText.includes("<status>OK</status>") || responseText.includes("<status>ok</status>")) {
-                montoGlobal = responseText.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
-                ticketRealGlobal = responseText.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
-                tariffIdGlobal = responseText.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
+            // CASO: TICKET CON DEUDA (XML)
+            if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
+                montoGlobal = text.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
+                ticketRealGlobal = text.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
+                tariffIdGlobal = text.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
 
                 document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
                 document.getElementById('payment-view').style.display = 'block';
-                
-                setupYappyButton();
+                setupYappy();
             } else {
-                showError("El servidor no reconoció el ticket.");
+                showError("Ticket no reconocido.");
             }
         } catch (e) {
-            showError("Error de comunicación con el servidor.");
+            showError("Error al conectar con el servidor.");
         }
     }
 
-    function setupYappyButton() {
+    function setupYappy() {
         const container = document.getElementById('yappy-container');
-        // Botón de pago gratis si el monto es 0
         if (parseFloat(montoGlobal) <= 0) {
-            container.innerHTML = `<button onclick="finalizarEnJanus()" style="width:100%; padding:16px; border-radius:30px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer; font-size:1rem;">VALIDAR GRATIS</button>`;
+            container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; padding:16px; border-radius:30px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer; font-size:1rem;">VALIDAR GRATIS</button>`;
         } else {
             container.innerHTML = `<btn-yappy theme="light" rounded="true" is-disabled="true"></btn-yappy>`;
             const btn = document.querySelector('btn-yappy');
@@ -146,19 +140,15 @@
                     });
                     const data = await res.json();
                     btn.eventPayment({ transactionId: data.transactionId, token: data.token, documentName: data.documentName });
-                } catch (err) {
-                    alert("No se pudo iniciar la orden de Yappy.");
-                }
+                } catch (e) { alert("Error al generar orden."); }
             });
 
-            btn.addEventListener("eventSuccess", (ev) => {
-                finalizarEnJanus(ev.detail.hash, ev.detail.orderId);
-            });
+            btn.addEventListener("eventSuccess", (ev) => liberarJanus());
         }
     }
 
-    async function finalizarEnJanus(hash = "", orderId = "") {
-        document.getElementById('yappy-container').innerHTML = "<div class='loading'>Sincronizando...</div>";
+    async function liberarJanus() {
+        document.getElementById('yappy-container').innerHTML = "<div class='loading'>Finalizando...</div>";
         try {
             const res = await fetch(WORKER_URL, {
                 method: "POST",
@@ -172,36 +162,34 @@
             });
             const data = await res.json();
             if (data.janusResponse.includes("<status>OK</status>")) {
-                // Al finalizar con éxito, mostramos la vista corregida
-                showSuccessView(ticketRealGlobal, "20", "PAGO EXITOSO");
+                showSuccess(ticketRealGlobal, "15", "PAGO EXITOSO");
             } else {
-                showError("Error al validar el pago en Janus.");
+                showError("Error al liberar en Janus.");
             }
-        } catch (e) {
-            showError("Error al finalizar la transacción.");
-        }
+        } catch (e) { showError("Error de red."); }
     }
 
-    function showSuccessView(id, mins, headerText) {
-        document.getElementById('header-title').innerText = headerText;
+    function showSuccess(id, mins, title) {
+        document.getElementById('header-title').innerText = title;
         document.getElementById('payment-view').style.display = 'none';
         document.getElementById('success-view').style.display = 'block';
         document.getElementById('ticket-final-id').innerText = `ID: ${id}`;
-        document.getElementById('mins-val').innerText = mins;
+        document.getElementById('mins-qty').innerText = mins;
     }
 
     function showError(msg) {
-        const errContainer = document.getElementById('error-container');
-        if (errContainer) errContainer.innerHTML = `<div class="error-msg">${msg}</div>`;
+        document.getElementById('loading-view').style.display = 'none';
+        document.getElementById('payment-view').style.display = 'block';
+        document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
     }
 
-    function validarFormulario() {
-        const email = document.getElementById('email').value;
-        const nit = document.getElementById('nit').value;
+    function validar() {
+        const e = document.getElementById('email').value;
+        const n = document.getElementById('nit').value;
         const btn = document.querySelector('btn-yappy');
         if (btn) {
-            const isValid = nit.trim().length >= 2 && email.includes('@') && email.includes('.');
-            btn.setAttribute('is-disabled', !isValid);
+            const ok = n.trim().length >= 2 && e.includes('@') && e.includes('.');
+            btn.setAttribute('is-disabled', !ok);
         }
     }
 
