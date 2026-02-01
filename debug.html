@@ -20,16 +20,15 @@
         .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 25px; }
         .form-group { text-align: left; margin-bottom: 15px; }
         label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
-        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; }
+        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
 
         /* Vista de Éxito / Ya Validado */
-        .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 10px; display: block; }
-        .status-msg { color: var(--tas-blue); font-weight: 700; font-size: 1.3rem; margin-bottom: 15px; text-transform: uppercase; }
+        .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
         .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
         .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
         .footer-thanks { color: #aaa; font-size: 0.85rem; }
 
-        #yappy-container { margin-top: 20px; min-height: 60px; }
+        #yappy-container { margin-top: 20px; min-height: 60px; display: flex; justify-content: center; }
         .loading { color: var(--tas-accent); font-weight: 600; padding: 20px; }
         .error-msg { color: #dc3545; font-weight: 600; margin-top: 15px; font-size: 0.9rem; }
     </style>
@@ -62,10 +61,9 @@
 
         <div id="success-view" style="display:none;">
             <span class="check-icon">✓</span>
-            <div class="status-msg">Ticket Validado</div>
             <span class="ticket-final" id="ticket-final-id">ID: ---</span>
             
-            <div class="time-box" id="time-message">
+            <div class="time-box">
                 Tiene <b id="mins-qty">--</b> <b id="mins-word">minutos</b> para salir de las instalaciones.
             </div>
             
@@ -97,7 +95,6 @@
             const text = await res.text();
             document.getElementById('loading-view').style.display = 'none';
 
-            // CASO: TICKET YA VALIDADO (JSON)
             if (text.trim().startsWith('{')) {
                 const data = JSON.parse(text);
                 if (data.status === "ALREADY_VALIDATED") {
@@ -106,7 +103,6 @@
                 }
             }
 
-            // CASO: TICKET CON DEUDA (XML)
             if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
                 montoGlobal = text.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
                 ticketRealGlobal = text.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
@@ -129,7 +125,8 @@
         if (parseFloat(montoGlobal) <= 0) {
             container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; padding:16px; border-radius:30px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer; font-size:1rem;">VALIDAR GRATIS</button>`;
         } else {
-            container.innerHTML = `<btn-yappy theme="light" rounded="true" is-disabled="true"></btn-yappy>`;
+            // Implementación de Botón Sky
+            container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
             const btn = document.querySelector('btn-yappy');
             
             btn.addEventListener("eventClick", async () => {
