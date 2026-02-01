@@ -5,56 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TAS | Pago de Parqueo</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
+    <script type="module" src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
     <style>
-        :root { --tas-red: #e88d43; --tas-green: #28a745; --dark: #1f95f0; --yappy-blue: #00ADEF; }
+        :root { --tas-red: #e88d43; --tas-green: #28a745; --dark: #1f95f0; }
         body { font-family: 'Montserrat', sans-serif; background-color: #f8f9fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .payment-card { background: white; width: 90%; max-width: 450px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
         .header { background: var(--dark); padding: 20px; text-align: center; border-bottom: 4px solid var(--tas-red); }
         .content { padding: 30px; }
         .amount-section { text-align: center; margin-bottom: 25px; }
-        .amount-label { font-size: 0.9rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
         .amount-value { font-size: 2.5rem; font-weight: 700; color: var(--dark); margin: 5px 0; }
-        .ticket-info { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #888; margin-bottom: 25px; word-break: break-all; text-align: center; }
+        .ticket-info { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #888; margin-bottom: 25px; text-align: center; }
         .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; color: #444; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; outline: none; }
-        input:focus { border-color: var(--tas-red); }
-        input:disabled { background-color: #f0f0f0; cursor: not-allowed; }
-        #yappy-container { margin-top: 25px; min-height: 50px; display: flex; flex-direction: column; align-items: center; width: 100%; }
-        .btn-confirmar { background: var(--tas-green); color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; text-transform: uppercase; }
-        .btn-yappy-fallback { background: var(--yappy-blue); color: white; border: none; padding: 15px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; text-transform: uppercase; margin-top: 10px; }
-        .btn-yappy-fallback:disabled { background: #ccc; cursor: not-allowed; }
-        .loading-spinner { color: var(--tas-red); font-weight: bold; text-align: center; }
-        .alert-info { background:#d4edda; color:#155724; padding:15px; border-radius:8px; text-align:center; border:1px solid #c3e6cb; font-size: 0.9rem; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+        #yappy-container { margin-top: 25px; display: flex; flex-direction: column; align-items: center; width: 100%; }
+        .loading-spinner { color: var(--tas-red); font-weight: bold; text-align: center; margin-top: 10px; }
+        .alert-info { background:#d4edda; color:#155724; padding:15px; border-radius:8px; text-align:center; border:1px solid #c3e6cb; }
         .success-view { text-align: center; padding: 20px 0; }
-        .success-icon { font-size: 4rem; color: var(--tas-green); margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div class="payment-card">
-    <div class="header" id="card-header"><h2 id="header-title" style="color: white; margin: 0; font-size: 1.2rem;">Detalle de Pago</h2></div>
+    <div class="header"><h2 id="header-title" style="color: white; margin: 0; font-size: 1.2rem;">Detalle de Pago</h2></div>
     <div class="content" id="main-content">
         <div id="payment-ui">
             <div class="amount-section">
-                <div class="amount-label">Total a Pagar</div>
                 <div id="monto-display" class="amount-value">Q --.--</div>
             </div>
-            <div class="ticket-info"><strong>Ticket ID:</strong> <span id="ticket-id">Cargando...</span></div>
+            <div class="ticket-info">Ticket ID: <span id="ticket-id">Cargando...</span></div>
             
-            <div class="form-group">
-                <label for="nit">NIT <span id="nit-req">*</span></label>
-                <input type="text" id="nit" placeholder="CF o NIT" oninput="escucharCambios()">
-            </div>
-            
-            <div class="form-group">
-                <label for="email">Correo Electrónico <span id="email-req">*</span></label>
-                <input type="email" id="email" placeholder="usuario@dominio.com" oninput="escucharCambios()">
+            <div id="form-fields">
+                <div class="form-group">
+                    <label>NIT *</label>
+                    <input type="text" id="nit" placeholder="CF o NIT" oninput="validarForm()">
+                </div>
+                <div class="form-group">
+                    <label>Correo Electrónico *</label>
+                    <input type="email" id="email" placeholder="usuario@dominio.com" oninput="validarForm()">
+                </div>
             </div>
 
             <div id="yappy-container">
-                <div class="loading-spinner">Sincronizando con Servidor...</div>
+                <div class="loading-spinner">Sincronizando...</div>
             </div>
         </div>
     </div>
@@ -62,169 +54,108 @@
 
 <script>
     const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
-    const params = new URLSearchParams(window.location.search);
-    const ticketParam = params.get('ticket');
-    const statusParam = params.get('status');
-    
-    let montoGlobal = 0;
-    let ticketRealGlobal = "";
-    let tariffIdGlobal = 10;
-
-    // Validación para habilitar botones
-    function escucharCambios() {
-        if (parseFloat(montoGlobal) <= 0) return;
-        const nit = document.getElementById('nit').value.trim();
-        const email = document.getElementById('email').value.trim();
-        const esValido = /^([0-9]+|[Cc][Ff])$/.test(nit) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        
-        const btnFallback = document.getElementById('btn-fallback');
-        if (btnFallback) btnFallback.disabled = !esValido;
-        
-        const btnReal = document.getElementById('btn-real');
-        if (btnReal) btnReal.setAttribute('is-disabled', !esValido);
-    }
+    const ticketParam = new URLSearchParams(window.location.search).get('ticket');
+    let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
 
     async function init() {
-        // --- FLUJO DE RETORNO EXITOSO (YAPPY) ---
-        if (statusParam === 'success') {
-            document.getElementById('yappy-container').innerHTML = "<div class='loading-spinner'>Pago verificado. Aplicando validación...</div>";
-            procesarPago(true); // true indica que viene de Yappy
-            return;
-        }
-        
-        if (statusParam === 'fail') alert("⚠️ El pago fue cancelado o falló.");
-
-        // --- FLUJO NORMAL DE CARGA ---
-        if (!ticketParam) { document.getElementById('yappy-container').innerHTML = "Ticket no detectado"; return; }
-        
+        if (!ticketParam) return;
         try {
-            const response = await fetch(WORKER_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "getData", ticket: ticketParam.trim() })
-            });
-
-            const resultText = await response.text();
-            if (resultText.includes("<status>OK</status>")) {
-                montoGlobal = resultText.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
-                ticketRealGlobal = resultText.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
-                tariffIdGlobal = resultText.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
+            const res = await fetch(WORKER_URL, { method: "POST", body: JSON.stringify({ action: "getData", ticket: ticketParam }) });
+            const text = await res.text();
+            if (text.includes("<status>OK</status>")) {
+                montoGlobal = text.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
+                ticketRealGlobal = text.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
+                tariffIdGlobal = text.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
 
                 document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
 
-                const yappyContainer = document.getElementById('yappy-container');
-                
                 if (parseFloat(montoGlobal) <= 0) {
-                    // Caso Q0 (Igual que antes)
-                    document.getElementById('nit').disabled = true;
-                    document.getElementById('email').disabled = true;
-                    yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="procesarPago(false)">Validar ticket</button>`;
+                    document.getElementById('form-fields').style.display = 'none';
+                    document.getElementById('yappy-container').innerHTML = `<button onclick="procesarLiberacion()" style="padding:15px; width:100%; border-radius:30px; background:green; color:white; font-weight:bold; border:none; cursor:pointer;">VALIDAR TICKET</button>`;
                 } else {
-                    // Caso Pago (Yappy)
-                    yappyContainer.innerHTML = `
-                        <yappy-button id="btn-real" mode="button" color="brand" is-disabled="true" merchant-id="test"></yappy-button>
-                        <button id="btn-fallback" class="btn-yappy-fallback" disabled onclick="iniciarYappy()">Pagar con Yappy</button>
-                    `;
-                    setTimeout(() => {
-                        const btnReal = document.getElementById('btn-real');
-                        if (btnReal) btnReal.addEventListener('yappy-clicked', iniciarYappy);
-                        if (!btnReal || btnReal.offsetWidth === 0) if(btnReal) btnReal.style.display = 'none';
-                    }, 1500);
+                    document.getElementById('yappy-container').innerHTML = `<btn-yappy id="btn-yappy-comp" theme="blue" is-disabled="true"></btn-yappy>`;
+                    setupYappy();
                 }
             }
-        } catch (e) { document.getElementById('yappy-container').innerHTML = "Error al cargar datos."; }
+        } catch (e) { console.error(e); }
     }
 
-    async function iniciarYappy() {
+    function validarForm() {
         const nit = document.getElementById('nit').value.trim();
         const email = document.getElementById('email').value.trim();
-        localStorage.setItem('temp_nit', nit);
-        localStorage.setItem('temp_email', email);
+        const ok = /^([0-9]+|[Cc][Ff])$/.test(nit) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        const btn = document.querySelector('btn-yappy');
+        if (btn) btn.setAttribute('is-disabled', !ok);
+    }
+
+    function setupYappy() {
+        const btn = document.querySelector('btn-yappy');
         
-        document.getElementById('yappy-container').innerHTML = "<div class='loading-spinner'>Generando orden de Yappy...</div>";
-        
-        try {
+        // Al hacer click, generamos la orden en el Worker
+        btn.addEventListener("eventClick", async () => {
+            localStorage.setItem('temp_nit', document.getElementById('nit').value);
+            localStorage.setItem('temp_email', document.getElementById('email').value);
+            
             const res = await fetch(WORKER_URL, {
                 method: "POST",
-                body: JSON.stringify({ action: "createYappyPayment", ticket: ticketRealGlobal, amount: montoGlobal })
+                body: JSON.stringify({ action: "createYappyOrder", ticket: ticketRealGlobal, amount: montoGlobal })
             });
             const data = await res.json();
-            if (data.success) window.location.href = data.url;
-            else { alert("Error Yappy: " + data.message); init(); }
-        } catch (e) { alert("Error de conexión"); }
-    }
-
-    async function procesarPago(esYappy) {
-        const container = document.getElementById('yappy-container');
-        const nitInput = esYappy ? localStorage.getItem('temp_nit') : document.getElementById('nit').value.trim();
-        const emailInput = esYappy ? localStorage.getItem('temp_email') : document.getElementById('email').value.trim();
-        const nitFinal = (nitInput === "" || !nitInput) ? "CF" : nitInput;
-
-        try {
-            const response = await fetch(WORKER_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    action: "applyPayment", 
-                    ticket: ticketParam, // Usamos el del URL original
-                    amount: montoGlobal,
-                    tariffId: tariffIdGlobal,
-                    nit: nitFinal
-                })
+            
+            // Llamamos al modal de Yappy con los tokens recibidos
+            btn.eventPayment({
+                transactionId: data.body.transactionId,
+                documentName: data.body.documentName,
+                token: data.body.token
             });
+        });
 
-            const data = await response.json(); 
-            if (data.janusResponse.includes("<status>OK</status>")) {
-                // Descarga factura si hubo pago
-                if (parseFloat(montoGlobal) > 0) descargarFacturaLocal(nitFinal, emailInput, data.uuidFactura);
-                
-                // RE-CONSULTA TIEMPO DE SALIDA (Tu lógica original)
-                container.innerHTML = "<div class='loading-spinner'>Actualizando tiempo de salida...</div>";
-                
-                const updateRes = await fetch(WORKER_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "getData", ticket: ticketParam })
-                });
-                
-                const resText = await updateRes.text();
-                let tiempoFinal = "15";
-                const matchFree = resText.match(/<freeExit>(.*?)<\/freeExit>/);
-                if (matchFree) tiempoFinal = matchFree[1];
-
-                mostrarExito("PAGO EXITOSO", ticketParam, tiempoFinal);
-            }
-        } catch (error) { container.innerHTML = "Error en la aplicación del pago."; }
+        // Al completarse el pago con éxito
+        btn.addEventListener("eventSuccess", () => {
+            document.getElementById('form-fields').style.display = 'none';
+            document.getElementById('yappy-container').innerHTML = "<div class='loading-spinner'>Pago Exitoso. Validando en salida...</div>";
+            procesarLiberacion();
+        });
     }
 
-    function mostrarExito(titulo, ticketId, tiempoSalida) {
-        document.getElementById('header-title').innerText = titulo;
-        document.getElementById('main-content').innerHTML = `
-            <div class="success-view">
-                <div class="success-icon">✓</div>
-                <h3 style="color: var(--dark); margin-bottom: 5px;">TICKET VALIDADO</h3>
-                <p style="font-weight: bold; font-size: 1.1rem; color: #444;">ID: ${ticketId}</p>
-                <div class="alert-info" style="margin-top: 20px;">
-                    Tiene <b>${tiempoSalida} minutos</b> para salir de las instalaciones.
-                </div>
-                <p style="font-size: 0.8rem; color: #888; margin-top: 25px;">¡Gracias por su visita!</p>
-            </div>`;
+    async function procesarLiberacion() {
+        const nit = localStorage.getItem('temp_nit') || document.getElementById('nit').value || "CF";
+        const email = localStorage.getItem('temp_email') || document.getElementById('email').value || "";
+        
+        const res = await fetch(WORKER_URL, {
+            method: "POST",
+            body: JSON.stringify({ action: "applyPayment", ticket: ticketRealGlobal, amount: montoGlobal, tariffId: tariffIdGlobal, nit: nit })
+        });
+        const data = await res.json();
+
+        if (data.janusResponse.includes("<status>OK</status>")) {
+            if (parseFloat(montoGlobal) > 0) descargarFactura(nit, email, data.uuidFactura);
+            
+            // Re-consulta final para mostrar el tiempo de salida real
+            const resCheck = await fetch(WORKER_URL, { method: "POST", body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal }) });
+            const checkText = await resCheck.text();
+            let mins = "15";
+            const match = checkText.match(/<freeExit>(.*?)<\/freeExit>/);
+            if (match) mins = match[1];
+
+            document.getElementById('header-title').innerText = "¡PAGO EXITOSO!";
+            document.getElementById('main-content').innerHTML = `
+                <div class="success-view">
+                    <h1 style="color:green; font-size:4rem;">✓</h1>
+                    <h3>TICKET VALIDADO</h3>
+                    <p>ID: ${ticketRealGlobal}</p>
+                    <div class="alert-info">Tiene <b>${mins} minutos</b> para salir.</div>
+                </div>`;
+        }
     }
 
-    function descargarFacturaLocal(nit, email, uuid) {
-        const datosFactura = {
-            "ticket": ticketParam,
-            "monto": montoGlobal,
-            "nit_cliente": nit,
-            "email_cliente": email,
-            "uuid_transaccion": uuid,
-            "fecha": new Date().toLocaleString()
-        };
-        const blob = new Blob([JSON.stringify(datosFactura, null, 2)], {type:'application/json'});
+    function descargarFactura(nit, email, uuid) {
+        const fact = { ticket: ticketRealGlobal, monto: montoGlobal, nit: nit, email: email, uuid: uuid, fecha: new Date().toLocaleString() };
+        const blob = new Blob([JSON.stringify(fact, null, 2)], {type:'application/json'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `Factura_${ticketParam}.json`;
+        a.download = `Factura_${ticketRealGlobal}.json`;
         a.click();
     }
 
