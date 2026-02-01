@@ -25,7 +25,6 @@
         .btn-confirmar:hover { opacity: 0.9; transform: scale(1.02); }
         .loading-spinner { color: var(--tas-red); font-weight: bold; }
         .alert-info { background:#d4edda; color:#155724; padding:15px; border-radius:8px; text-align:center; border:1px solid #c3e6cb; font-size: 0.9rem; }
-        /* Nueva clase para el éxito centrado */
         .success-view { text-align: center; padding: 20px 0; }
         .success-icon { font-size: 4rem; color: var(--tas-green); margin-bottom: 10px; }
     </style>
@@ -66,7 +65,6 @@
     let montoGlobal = 0;
     let ticketRealGlobal = "";
     let tariffIdGlobal = 10;
-    let freeExitGlobal = "0";
 
     function validarFormulario() {
         if (parseFloat(montoGlobal) <= 0) return true;
@@ -106,7 +104,6 @@
                 montoGlobal = resultText.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
                 ticketRealGlobal = resultText.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
                 tariffIdGlobal = resultText.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
-                freeExitGlobal = resultText.match(/<freeExit>(.*?)<\/freeExit>/)?.[1] || "15";
 
                 montoDiv.innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
@@ -134,7 +131,7 @@
         const email = document.getElementById('email').value.trim();
         const nitParaEnvio = (nitInput === "") ? "CF" : nitInput;
 
-        container.innerHTML = "<div class='loading-spinner'>Procesando...</div>";
+        container.innerHTML = "<div class='loading-spinner'>Procesando pago...</div>";
 
         try {
             const response = await fetch(WORKER_URL, {
@@ -152,8 +149,23 @@
             const data = await response.json(); 
             if (data.janusResponse.includes("<status>OK</status>")) {
                 if (parseFloat(montoGlobal) > 0) descargarFacturaLocal(data.nitFinal, email, data.uuidFactura);
-                // LLAMADA A LA NUEVA INTERFAZ DE ÉXITO
-                mostrarExito("PAGO EXITOSO", ticketRealGlobal, freeExitGlobal);
+                
+                // RE-CONSULTA PARA OBTENER TIEMPO DE SALIDA REAL TRAS PAGO
+                container.innerHTML = "<div class='loading-spinner'>Actualizando tiempo de salida...</div>";
+                
+                const updateRes = await fetch(WORKER_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal })
+                });
+                
+                let tiempoFinal = "15"; 
+                const updateData = await updateRes.json();
+                if (updateData.status === "ALREADY_VALIDATED") {
+                    tiempoFinal = updateData.remaining;
+                }
+
+                mostrarExito("PAGO EXITOSO", ticketRealGlobal, tiempoFinal);
             } else {
                 container.innerHTML = "<b style='color:orange'>Error Janus: No se pudo aplicar.</b>";
             }
@@ -162,12 +174,8 @@
         }
     }
 
-    // Función para limpiar la pantalla y mostrar el mensaje final
     function mostrarExito(titulo, ticketId, tiempoSalida) {
-        // 1. Cambiar el título del header (fondo celeste)
         document.getElementById('header-title').innerText = titulo;
-        
-        // 2. Reemplazar todo el contenido de main-content
         const mainContent = document.getElementById('main-content');
         mainContent.innerHTML = `
             <div class="success-view">
