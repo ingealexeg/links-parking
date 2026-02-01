@@ -16,7 +16,8 @@
         .ticket-box { background: #eee; padding: 10px; border-radius: 10px; font-size: 0.8rem; margin-bottom: 20px; }
         .form-group { text-align: left; margin-bottom: 15px; }
         label { font-size: 0.8rem; font-weight: 700; color: #555; display: block; margin-bottom: 5px; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; outline: none; }
+        input:focus { border-color: var(--tas-blue); }
         #yappy-container { margin-top: 20px; min-height: 50px; }
         .loading { color: var(--tas-accent); font-weight: bold; }
     </style>
@@ -24,7 +25,7 @@
 <body>
 
 <div class="card">
-    <div class="header"><h2 style="margin:0; font-size:1.2rem;">DETALLE DE PAGO</h2></div>
+    <div class="header"><h2 id="header-title" style="margin:0; font-size:1.2rem;">DETALLE DE PAGO</h2></div>
     <div class="content" id="main-content">
         <div class="amount" id="monto-display">Q --.--</div>
         <div class="ticket-box">Ticket: <span id="ticket-id">Cargando...</span></div>
@@ -53,9 +54,7 @@
 
     async function init() {
         if (!ticketParam) return;
-        
         try {
-            // PASO 1: Obtener datos SIEMPRE
             const res = await fetch(WORKER_URL, { method: "POST", body: JSON.stringify({ action: "getData", ticket: ticketParam }) });
             const text = await res.text();
             
@@ -66,9 +65,9 @@
                 document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
 
-                // PASO 2: Ahora que tenemos datos, ¿venimos de un pago exitoso?
+                // Si detectamos éxito en la URL, liberamos. Si no, mostramos botón.
                 if (statusParam === 'success') {
-                    ejecutarLiberacion();
+                    ejecutarLiberacion("URL_BYPASS", "BYPASS-" + Date.now());
                 } else {
                     mostrarBoton();
                 }
@@ -88,49 +87,47 @@
 
     function setupEvents() {
         const btn = document.querySelector('btn-yappy');
-        btn.addEventListener("eventClick", () => {
-            // Aquí llamarías a createYappyOrder en el Worker
-            alert("Iniciando pago..."); 
-        });
+        // El lunes agregaremos la lógica de createYappyOrder aquí
         btn.addEventListener("eventSuccess", (ev) => {
             ejecutarLiberacion(ev.detail.hash, ev.detail.orderId);
         });
     }
 
     async function ejecutarLiberacion(hash = "", orderId = "") {
-        document.getElementById('form-ui').innerHTML = "<div class='loading'>Validando pago y liberando ticket...</div>";
-        
-        const nit = document.getElementById('nit')?.value || "CF";
+        document.getElementById('form-ui').innerHTML = "<div class='loading'>Validando con Janus...</div>";
         const res = await fetch(WORKER_URL, {
             method: "POST",
             body: JSON.stringify({ 
-                action: "applyPayment", 
+                action: "applyPaymentSecure", // Nueva función segura
                 ticket: ticketRealGlobal, 
                 amount: montoGlobal,
                 hash: hash,
-                orderId: orderId,
-                nit: nit
+                orderId: orderId || "FREE-" + Date.now(),
+                nit: document.getElementById('nit')?.value || "CF"
             })
         });
         
         const data = await res.json();
         if (data.janusResponse.includes("<status>OK</status>")) {
-            // Re-consulta para tiempo de salida
             const resData = await fetch(WORKER_URL, { method: "POST", body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal }) });
             const txt = await resData.text();
             const mins = txt.match(/<freeExit>(.*?)<\/freeExit>/)?.[1] || "15";
 
+            document.getElementById('header-title').innerText = "¡PAGO EXITOSO!";
             document.getElementById('main-content').innerHTML = `
                 <div style="color:var(--tas-green); font-size:4rem;">✓</div>
-                <h3>¡LISTO PARA SALIR!</h3>
-                <div style="background:#d4edda; padding:15px; border-radius:10px;">
+                <h3 style="margin:0">TICKET VALIDADO</h3>
+                <p style="color:#666">ID: ${ticketRealGlobal}</p>
+                <div style="background:#e6fffa; padding:15px; border-radius:12px; border:1px solid #b2f5ea; margin-top:15px;">
                     Tiene <b>${mins} minutos</b> para salir.
                 </div>`;
         }
     }
 
     function validar() {
-        const ok = document.getElementById('nit').value.length > 1 && document.getElementById('email').value.includes('@');
+        const email = document.getElementById('email').value;
+        const nit = document.getElementById('nit').value;
+        const ok = nit.length > 1 && email.includes('@');
         const btn = document.querySelector('btn-yappy');
         if (btn) btn.setAttribute('is-disabled', !ok);
     }
