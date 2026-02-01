@@ -22,19 +22,18 @@
         label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
         input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
 
-        /* Contenedor del Botón Yappy corregido */
+        /* Contenedor del Botón Yappy - CORREGIDO PARA NO DESBORDAR */
         #yappy-container { 
             margin-top: 25px; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center;
             width: 100%;
+            display: flex;
+            justify-content: center;
         }
-        /* Ajuste de dimensiones para que no sea una burbuja alta */
+        /* Forzamos al componente a ser responsivo y no salirse */
         btn-yappy { 
-            width: 100%; 
-            max-width: 280px; /* Más ancho */
-            height: 50px;    /* Altura estándar de botón */
+            width: 100% !important; 
+            max-width: 320px; 
+            display: block;
         }
 
         /* Vista de Éxito / Ya Validado */
@@ -137,10 +136,10 @@
     function setupYappy() {
         const container = document.getElementById('yappy-container');
         if (parseFloat(montoGlobal) <= 0) {
-            container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; max-width:280px; padding:16px; border-radius:10px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer; font-size:1rem;">VALIDAR GRATIS</button>`;
+            container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; max-width:280px; padding:16px; border-radius:12px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer; font-size:1rem;">VALIDAR GRATIS</button>`;
         } else {
-            // Cambio a tema SKY con forma rectangular suave (rounded="true" en Yappy V2 es menos agresivo)
-            container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
+            // Usamos theme "sky" y quitamos el rounded para que sea un rectángulo estéticamente superior
+            container.innerHTML = `<btn-yappy theme="sky" is-disabled="true"></btn-yappy>`;
             const btn = document.querySelector('btn-yappy');
             
             btn.addEventListener("eventClick", async () => {
