@@ -14,7 +14,6 @@
         .header h2 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
         .content { padding: 35px 25px; }
         
-        /* Vista de Pago */
         .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px; }
         .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 20px; }
         .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 25px; }
@@ -22,27 +21,35 @@
         label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
         input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
 
-        /* Contenedor del Botón Yappy - Ajustado para que no se salga */
-        #yappy-container { 
-            margin-top: 25px; 
+        /* Contenedor con bloqueo visual */
+        #yappy-wrapper {
+            margin-top: 25px;
+            position: relative;
             width: 100%;
             display: flex;
             justify-content: center;
-            overflow: hidden; /* Evita cualquier desborde visual */
+        }
+        /* Capa invisible para evitar clics cuando está deshabilitado */
+        #yappy-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            cursor: not-allowed;
+            display: block; /* Empieza bloqueado */
         }
         
         btn-yappy { 
             width: 100% !important; 
-            max-width: 300px; /* Ancho controlado */
+            max-width: 300px;
             display: block;
+            opacity: 0.4; /* Se ve apagado al inicio */
+            transition: opacity 0.3s ease;
         }
 
-        /* Vista de Éxito / Ya Validado */
         .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
         .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
         .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
         .footer-thanks { color: #aaa; font-size: 0.85rem; }
-
         .loading { color: var(--tas-accent); font-weight: 600; padding: 20px; }
         .error-msg { color: #dc3545; font-weight: 600; margin-top: 15px; font-size: 0.9rem; }
     </style>
@@ -52,7 +59,6 @@
 <div class="card">
     <div class="header"><h2 id="header-title">Detalle de Pago</h2></div>
     <div class="content" id="main-content">
-        
         <div id="loading-view" class="loading">Consultando servidor...</div>
 
         <div id="payment-view" style="display:none;">
@@ -62,28 +68,27 @@
             
             <div class="form-group">
                 <label>NIT *</label>
-                <input type="text" id="nit" placeholder="CF o NIT" oninput="validar()">
+                <input type="text" id="nit" placeholder="CF o NIT" onkeyup="validarForm()">
             </div>
             <div class="form-group">
                 <label>Correo Electrónico *</label>
-                <input type="email" id="email" placeholder="usuario@dominio.com" oninput="validar()">
+                <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
             </div>
             
-            <div id="yappy-container"></div>
+            <div id="yappy-wrapper">
+                <div id="yappy-overlay"></div> <div id="yappy-container"></div>
+            </div>
             <div id="error-container"></div>
         </div>
 
         <div id="success-view" style="display:none;">
             <span class="check-icon">✓</span>
             <span class="ticket-final" id="ticket-final-id">ID: ---</span>
-            
             <div class="time-box">
                 Tiene <b id="mins-qty">--</b> <b>minutos</b> para salir de las instalaciones.
             </div>
-            
             <div class="footer-thanks">¡Gracias por su visita!</div>
         </div>
-
     </div>
 </div>
 
@@ -91,21 +96,12 @@
     const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
     const params = new URLSearchParams(window.location.search);
     const ticketParam = params.get('ticket');
-
     let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
 
     async function init() {
-        if (!ticketParam) {
-            showError("Falta el ticket en la URL.");
-            return;
-        }
-
+        if (!ticketParam) { showError("Falta el ticket."); return; }
         try {
-            const res = await fetch(WORKER_URL, { 
-                method: "POST", 
-                body: JSON.stringify({ action: "getData", ticket: ticketParam }) 
-            });
-
+            const res = await fetch(WORKER_URL, { method: "POST", body: JSON.stringify({ action: "getData", ticket: ticketParam }) });
             const text = await res.text();
             document.getElementById('loading-view').style.display = 'none';
 
@@ -121,63 +117,51 @@
                 montoGlobal = text.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
                 ticketRealGlobal = text.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
                 tariffIdGlobal = text.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
-
                 document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
                 document.getElementById('payment-view').style.display = 'block';
                 setupYappy();
-            } else {
-                showError("Ticket no reconocido.");
-            }
-        } catch (e) {
-            showError("Error al conectar con el servidor.");
-        }
+            } else { showError("Ticket no reconocido."); }
+        } catch (e) { showError("Error de conexión."); }
     }
 
     function setupYappy() {
         const container = document.getElementById('yappy-container');
         if (parseFloat(montoGlobal) <= 0) {
-            container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; max-width:280px; padding:16px; border-radius:12px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer; font-size:1rem;">VALIDAR GRATIS</button>`;
+            container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; max-width:280px; padding:16px; border-radius:12px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">VALIDAR GRATIS</button>`;
+            document.getElementById('yappy-overlay').style.display = 'none';
         } else {
-            // Se restaura rounded="true" para recuperar el borde redondeado profesional
             container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
             const btn = document.querySelector('btn-yappy');
-            
             btn.addEventListener("eventClick", async () => {
-                try {
-                    const res = await fetch(WORKER_URL, {
-                        method: "POST",
-                        body: JSON.stringify({ action: "createYappyV2Order", ticket: ticketRealGlobal, amount: montoGlobal })
-                    });
-                    const data = await res.json();
-                    btn.eventPayment({ transactionId: data.transactionId, token: data.token, documentName: data.documentName });
-                } catch (e) { alert("Error al generar orden."); }
+                const res = await fetch(WORKER_URL, { method: "POST", body: JSON.stringify({ action: "createYappyV2Order", ticket: ticketRealGlobal, amount: montoGlobal }) });
+                const data = await res.json();
+                btn.eventPayment({ transactionId: data.transactionId, token: data.token, documentName: data.documentName });
             });
+            btn.addEventListener("eventSuccess", () => liberarJanus());
+        }
+    }
 
-            btn.addEventListener("eventSuccess", (ev) => liberarJanus());
+    function validarForm() {
+        const nit = document.getElementById('nit').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const btn = document.querySelector('btn-yappy');
+        const overlay = document.getElementById('yappy-overlay');
+        
+        const esValido = nit.length >= 2 && email.includes('@') && email.includes('.');
+
+        if (btn) {
+            btn.setAttribute('is-disabled', !esValido);
+            btn.style.opacity = esValido ? "1" : "0.4";
+            overlay.style.display = esValido ? "none" : "block";
         }
     }
 
     async function liberarJanus() {
-        document.getElementById('yappy-container').innerHTML = "<div class='loading'>Sincronizando...</div>";
-        try {
-            const res = await fetch(WORKER_URL, {
-                method: "POST",
-                body: JSON.stringify({ 
-                    action: "applyPayment", 
-                    ticket: ticketRealGlobal, 
-                    amount: montoGlobal,
-                    tariffId: tariffIdGlobal,
-                    nit: document.getElementById('nit').value || "CF"
-                })
-            });
-            const data = await res.json();
-            if (data.janusResponse.includes("<status>OK</status>")) {
-                showSuccess(ticketRealGlobal, "15", "PAGO EXITOSO");
-            } else {
-                showError("Error al liberar en Janus.");
-            }
-        } catch (e) { showError("Error de red."); }
+        document.getElementById('yappy-wrapper').innerHTML = "<div class='loading'>Sincronizando...</div>";
+        const res = await fetch(WORKER_URL, { method: "POST", body: JSON.stringify({ action: "applyPayment", ticket: ticketRealGlobal, amount: montoGlobal, tariffId: tariffIdGlobal, nit: document.getElementById('nit').value }) });
+        const data = await res.json();
+        if (data.janusResponse.includes("<status>OK</status>")) showSuccess(ticketRealGlobal, "15", "PAGO EXITOSO");
     }
 
     function showSuccess(id, mins, title) {
@@ -192,16 +176,6 @@
         document.getElementById('loading-view').style.display = 'none';
         document.getElementById('payment-view').style.display = 'block';
         document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
-    }
-
-    function validar() {
-        const e = document.getElementById('email').value;
-        const n = document.getElementById('nit').value;
-        const btn = document.querySelector('btn-yappy');
-        if (btn) {
-            const ok = n.trim().length >= 2 && e.includes('@') && e.includes('.');
-            btn.setAttribute('is-disabled', !ok);
-        }
     }
 
     window.onload = init;
