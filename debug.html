@@ -131,6 +131,7 @@
             container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; max-width:280px; padding:16px; border-radius:12px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">VALIDAR GRATIS</button>`;
             document.getElementById('yappy-overlay').style.display = 'none';
         } else {
+            container.innerHTML = '';
             container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
             const btn = document.querySelector('btn-yappy');
             btn.addEventListener("eventClick", async () => {
