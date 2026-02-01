@@ -89,16 +89,6 @@
                 body: JSON.stringify({ action: "getData", ticket: ticketParam.trim() })
             });
 
-            const contentType = response.headers.get("content-type");
-            
-            if (contentType && contentType.includes("application/json")) {
-                const data = await response.json();
-                if (data.status === "ALREADY_VALIDATED") {
-                    mostrarExito("TICKET YA VALIDADO", data.realTicket, data.remaining);
-                    return;
-                }
-            }
-
             const resultText = await response.text();
             if (resultText.includes("<status>OK</status>") || resultText.includes("<status>ok</status>")) {
                 montoGlobal = resultText.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
@@ -138,7 +128,7 @@
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                    action: "applyPayment", 
+                    action: "applyPayment",  // Función Legacy
                     ticket: ticketRealGlobal,
                     amount: montoGlobal,
                     tariffId: tariffIdGlobal,
@@ -148,10 +138,7 @@
 
             const data = await response.json(); 
             if (data.janusResponse.includes("<status>OK</status>")) {
-                if (parseFloat(montoGlobal) > 0) descargarFacturaLocal(data.nitFinal, email, data.uuidFactura);
-                
-                // RE-CONSULTA PARA OBTENER TIEMPO DE SALIDA REAL TRAS PAGO
-                container.innerHTML = "<div class='loading-spinner'>Actualizando tiempo de salida...</div>";
+                if (parseFloat(montoGlobal) > 0) descargarFacturaLocal(nitParaEnvio, email, "YAPPY-LEGACY");
                 
                 const updateRes = await fetch(WORKER_URL, {
                     method: "POST",
@@ -159,11 +146,8 @@
                     body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal })
                 });
                 
-                let tiempoFinal = "15"; 
-                const updateData = await updateRes.json();
-                if (updateData.status === "ALREADY_VALIDATED") {
-                    tiempoFinal = updateData.remaining;
-                }
+                const updateText = await updateRes.text();
+                let tiempoFinal = updateText.match(/<freeExit>(.*?)<\/freeExit>/)?.[1] || "15";
 
                 mostrarExito("PAGO EXITOSO", ticketRealGlobal, tiempoFinal);
             } else {
@@ -185,21 +169,12 @@
                 <div class="alert-info" style="margin-top: 20px;">
                     Tiene <b>${tiempoSalida} minutos</b> para salir de las instalaciones.
                 </div>
-                <p style="font-size: 0.8rem; color: #888; margin-top: 25px;">¡Gracias por su visita!</p>
             </div>
         `;
     }
 
     function descargarFacturaLocal(nit, email, uuid) {
-        const datosFactura = {
-            "emisor": "TAS Seguridad",
-            "ticket": ticketRealGlobal,
-            "monto": montoGlobal,
-            "nit_cliente": nit,
-            "email_cliente": email,
-            "uuid_transaccion": uuid,
-            "fecha": new Date().toLocaleString('es-GT', { hour12: true })
-        };
+        const datosFactura = { "ticket": ticketRealGlobal, "monto": montoGlobal, "nit": nit, "email": email, "fecha": new Date().toLocaleString() };
         const blob = new Blob([JSON.stringify(datosFactura, null, 2)], {type:'application/json'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
