@@ -149,7 +149,7 @@
                 let textoBoton = (parseFloat(montoGlobal) <= 0) ? "Validar ticket" : "Pagar ticket";
                 yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="procesarPago()">${textoBoton}</button>`;
             } else {
-                throw new Error("El servidor no reconoció el ticket.");
+                throw new Error("Ticket no reconocido");
             }
         } catch (e) {
             yappyContainer.innerHTML = `<b style='color:red'>Error: ${e.message}</b>`;
