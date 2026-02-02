@@ -5,24 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TAS | Pago de Parqueo</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    
     <style>
+        /* Definición de variables visuales: Nótese que aquí el color de acento cambia a naranja (tas-red) */
         :root { --tas-red: #e88d43; --tas-green: #28a745; --dark: #1f95f0; }
+        
+        /* Estructura base: Centra la tarjeta en pantalla completa con un fondo gris claro */
         body { font-family: 'Montserrat', sans-serif; background-color: #f8f9fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        
+        /* Diseño de la tarjeta de pago: Define bordes, sombras y ancho máximo para móviles */
         .payment-card { background: white; width: 90%; max-width: 450px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
         .header { background: var(--dark); padding: 20px; text-align: center; border-bottom: 4px solid var(--tas-red); }
         .content { padding: 30px; }
+        
+        /* Tipografía del monto: Resalta el precio en grande y negrita para evitar confusiones al usuario */
         .amount-section { text-align: center; margin-bottom: 25px; }
         .amount-label { font-size: 0.9rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
         .amount-value { font-size: 2.5rem; font-weight: 700; color: var(--dark); margin: 5px 0; }
+        
+        /* Caja de ID del ticket: Usa 'word-break: break-all' por si el ID es excesivamente largo */
         .ticket-info { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #888; margin-bottom: 25px; word-break: break-all; text-align: center; }
+        
+        /* Formulario: Estiliza los inputs y añade un efecto visual (focus) al hacer clic en ellos */
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; color: #444; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; outline: none; }
         input:focus { border-color: var(--tas-red); }
         input:disabled { background-color: #f0f0f0; cursor: not-allowed; border-color: #eee; }
+
+        /* Botón de acción: Configura el color verde de "éxito" y una transición de escala al pasar el ratón */
         #yappy-container { margin-top: 25px; min-height: 50px; display: flex; flex-direction: column; align-items: center; }
         .btn-confirmar { background: var(--tas-green); color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; text-transform: uppercase; transition: 0.3s; }
         .btn-confirmar:hover { opacity: 0.9; transform: scale(1.02); }
+
+        /* Estados de carga y éxito: Estilos para los mensajes de sincronización y el check final */
         .loading-spinner { color: var(--tas-red); font-weight: bold; }
         .alert-info { background:#d4edda; color:#155724; padding:15px; border-radius:8px; text-align:center; border:1px solid #c3e6cb; font-size: 0.9rem; }
         .success-view { text-align: center; padding: 20px 0; }
@@ -34,6 +50,7 @@
 <div class="payment-card">
     <div class="header" id="card-header"><h2 id="header-title" style="color: white; margin: 0; font-size: 1.2rem;">Detalle de Pago</h2></div>
     <div class="content" id="main-content">
+        
         <div id="payment-ui">
             <div class="amount-section">
                 <div class="amount-label">Total a Pagar</div>
@@ -59,24 +76,36 @@
 </div>
 
 <script>
+    // Variables de entorno y captura de parámetros de la URL
     const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
     const ticketParam = new URLSearchParams(window.location.search).get('ticket');
     
-    let montoGlobal = 0;
-    let ticketRealGlobal = "";
-    let tariffIdGlobal = 10;
+    let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
 
+    /**
+     * FUNCIÓN VALIDARFORMULARIO: Validación estricta mediante RegEx.
+     * Verifica que el NIT sea numérico o la palabra "CF".
+     * Verifica que el email tenga un formato estándar (usuario@dominio.com).
+     */
     function validarFormulario() {
-        if (parseFloat(montoGlobal) <= 0) return true;
+        if (parseFloat(montoGlobal) <= 0) return true; // Si es gratis, no valida campos
         const nit = document.getElementById('nit').value.trim();
         const email = document.getElementById('email').value.trim();
+        
+        // Expresión regular para permitir solo números o las letras CF (case insensitive)
         const nitRegex = /^([0-9]+|[Cc][Ff])?$/;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
         if (!nitRegex.test(nit)) { alert("⚠️ El NIT debe ser numérico o 'CF'."); return false; }
         if (!emailRegex.test(email)) { alert("⚠️ Formato de correo electrónico inválido."); return false; }
         return true;
     }
 
+    /**
+     * FUNCIÓN INITPAYMENT: Carga inicial de datos.
+     * Consulta al Worker para saber cuánto debe el ticket.
+     * Si el ticket ya está validado, salta directamente a la pantalla de éxito.
+     */
     async function initPayment() {
         const montoDiv = document.getElementById('monto-display');
         const yappyContainer = document.getElementById('yappy-container');
@@ -89,8 +118,8 @@
                 body: JSON.stringify({ action: "getData", ticket: ticketParam.trim() })
             });
 
+            // Revisa si el servidor respondió con un JSON (indica estado ya validado)
             const contentType = response.headers.get("content-type");
-            
             if (contentType && contentType.includes("application/json")) {
                 const data = await response.json();
                 if (data.status === "ALREADY_VALIDATED") {
@@ -99,6 +128,7 @@
                 }
             }
 
+            // Si no es JSON, procesa la respuesta XML de Janus extraída como texto
             const resultText = await response.text();
             if (resultText.includes("<status>OK</status>") || resultText.includes("<status>ok</status>")) {
                 montoGlobal = resultText.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
@@ -108,13 +138,15 @@
                 montoDiv.innerText = `Q${montoGlobal}`;
                 document.getElementById('ticket-id').innerText = ticketRealGlobal;
 
-                let textoBoton = (parseFloat(montoGlobal) <= 0) ? "Validar ticket" : "Pagar ticket";
+                // Si el monto es 0, deshabilita los campos de NIT/Email y cambia el texto del botón
                 if (parseFloat(montoGlobal) <= 0) {
                     document.getElementById('nit').disabled = true;
                     document.getElementById('email').disabled = true;
                     document.getElementById('nit-req').style.display = 'none';
                     document.getElementById('email-req').style.display = 'none';
                 }
+                
+                let textoBoton = (parseFloat(montoGlobal) <= 0) ? "Validar ticket" : "Pagar ticket";
                 yappyContainer.innerHTML = `<button class="btn-confirmar" onclick="procesarPago()">${textoBoton}</button>`;
             } else {
                 throw new Error("El servidor no reconoció el ticket.");
@@ -124,8 +156,14 @@
         }
     }
 
+    /**
+     * FUNCIÓN PROCESARPAGO: Ejecución del cobro.
+     * 1. Envía la acción 'applyPayment' al Worker.
+     * 2. Si el monto es mayor a 0, dispara la descarga de la factura JSON.
+     * 3. Realiza una segunda consulta al Worker para obtener los minutos restantes de salida.
+     */
     async function procesarPago() {
-        if (!validarFormulario()) return;
+        if (!validarFormulario()) return; // Detiene el flujo si los datos están mal
         const container = document.getElementById('yappy-container');
         const nitInput = document.getElementById('nit').value.trim();
         const email = document.getElementById('email').value.trim();
@@ -148,11 +186,12 @@
 
             const data = await response.json(); 
             if (data.janusResponse.includes("<status>OK</status>")) {
+                // Lógica de facturación: Genera un archivo local si hubo pago real
                 if (parseFloat(montoGlobal) > 0) descargarFacturaLocal(data.nitFinal, email, data.uuidFactura);
                 
-                // RE-CONSULTA PARA OBTENER TIEMPO DE SALIDA REAL TRAS PAGO
                 container.innerHTML = "<div class='loading-spinner'>Actualizando tiempo de salida...</div>";
                 
+                // Segunda consulta para confirmar el tiempo de cortesía restante otorgado por Janus
                 const updateRes = await fetch(WORKER_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -174,6 +213,10 @@
         }
     }
 
+    /**
+     * FUNCIÓN MOSTRAREXITO: Renderizado final.
+     * Reemplaza todo el contenido del formulario por el mensaje de confirmación y el icono de check.
+     */
     function mostrarExito(titulo, ticketId, tiempoSalida) {
         document.getElementById('header-title').innerText = titulo;
         const mainContent = document.getElementById('main-content');
@@ -190,6 +233,11 @@
         `;
     }
 
+    /**
+     * FUNCIÓN DESCARGARFACTURALOCAL: Utilidad de descarga.
+     * Crea un objeto JSON con los datos de la transacción, lo convierte en un 'Blob'
+     * y simula un clic en un enlace oculto para forzar la descarga en el dispositivo del usuario.
+     */
     function descargarFacturaLocal(nit, email, uuid) {
         const datosFactura = {
             "emisor": "TAS Seguridad",
@@ -200,13 +248,15 @@
             "uuid_transaccion": uuid,
             "fecha": new Date().toLocaleString('es-GT', { hour12: true })
         };
+        // Crea el archivo virtual en la memoria del navegador
         const blob = new Blob([JSON.stringify(datosFactura, null, 2)], {type:'application/json'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `Factura_${ticketRealGlobal}.json`;
-        a.click();
+        a.click(); // Dispara la descarga automática
     }
 
+    // Inicialización al cargar la ventana
     window.onload = initPayment;
 </script>
 </body>
