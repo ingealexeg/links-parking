@@ -1,188 +1,259 @@
-// El sistema define la dirección del túnel para la comunicación con el servidor físico Janus
-const JANUS_IP = "sympathetic-retha-unsedulously.ngrok-free.dev";
-// El script almacena las credenciales de acceso para el servicio de integración de Janus
-const CREDENTIALS = { "username": "TasGT25", "password": "Hub$2025" };
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAS | Detalle de Pago</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <script type="module" src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
+    
+    <style>
+        /* El sistema define la paleta de colores y estilos visuales de la interfaz */
+        :root { --tas-blue: #1f95f0; --tas-accent: #e88d43; --tas-green: #28a745; --tas-light-green: #e9f5f0; }
+        body { font-family: 'Montserrat', sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: white; width: 92%; max-width: 400px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; text-align: center; }
+        .header { background: var(--tas-blue); padding: 20px; color: white; border-bottom: 4px solid var(--tas-accent); }
+        .header h2 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
+        .content { padding: 35px 25px; }
+        .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px; }
+        .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 20px; }
+        .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 25px; }
+        .form-group { text-align: left; margin-bottom: 15px; }
+        label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
+        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
+        /* El script usa una capa invisible (overlay) para impedir clics en el botón de Yappy si el formulario está incompleto */
+        #yappy-wrapper { margin-top: 25px; position: relative; width: 100%; display: center; justify-content: center; }
+        #yappy-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: not-allowed; display: block; }
+        btn-yappy { width: 100% !important; max-width: 300px; display: block; opacity: 0.4; transition: opacity 0.3s ease; }
+        .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
+        .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
+        .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
+        .footer-thanks { color: #aaa; font-size: 0.85rem; }
+        .loading { color: var(--tas-accent); font-weight: 600; padding: 20px; }
+        .error-msg { color: #dc3545; font-weight: 600; margin-top: 15px; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
 
-// El sistema establece los puntos finales y parámetros de configuración para la pasarela Yappy V2
-const YAPPY_UAT_URL = "https://api-comecom-uat.yappycloud.com";
-const MERCHANT_ID = "ID_DE_PRUEBAS"; 
-const DOMAIN_URL = "https://ingealexeg.github.io"; 
-// El motor utiliza esta clave secreta proporcionada por Yappy para la validación de integridad (Hash)
-const SECRET_KEY = "TU_CLAVE_SECRETA_AQUI"; 
+<div class="card">
+    <div class="header"><h2 id="header-title">Detalle de Pago</h2></div>
+    <div class="content" id="main-content">
+        <div id="loading-view" class="loading">Consultando servidor...</div>
+        <div id="payment-view" style="display:none;">
+            <div class="total-label">Total a Pagar</div>
+            <div id="monto-display" class="amount">Q --.--</div>
+            <div class="ticket-id-box">Ticket ID: <span id="ticket-id">---</span></div>
+            <div class="form-group">
+                <label>NIT *</label>
+                <input type="text" id="nit" placeholder="CF o NIT" onkeyup="validarForm()">
+            </div>
+            <div class="form-group">
+                <label>Correo Electrónico *</label>
+                <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
+            </div>
+            <div id="yappy-wrapper">
+                <div id="yappy-overlay"></div> 
+                <div id="yappy-container"></div>
+            </div>
+            <div id="error-container"></div>
+        </div>
+        <div id="success-view" style="display:none;">
+            <span class="check-icon">✓</span>
+            <span class="ticket-final" id="ticket-final-id">ID: ---</span>
+            <div class="time-box">Tiene <b id="mins-qty">--</b> <b>minutos</b> para salir de las instalaciones.</div>
+            <div class="footer-thanks">¡Gracias por su visita!</div>
+        </div>
+    </div>
+</div>
 
-// El script define las constantes de impuestos y valores fijos requeridos para la orden de cobro
-const PORCENTAJE_IMPUESTO = 0.12; 
-const ALIAS_YAPPY = "61234567"; 
-// Esta es la URL de retorno donde Yappy enviará al usuario después de pagar
-const IPN_URL = "https://ingealexeg.github.io/debug.html?ipn=true"; 
+<script>
+    // El script define la dirección del Worker y captura el parámetro ticket de la URL inicial
+    const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
+    const params = new URLSearchParams(window.location.search);
+    const ticketParam = params.get('ticket'); 
+    // Variables globales para persistir los datos durante la sesión del usuario
+    let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
 
-/**
- * El sistema genera un identificador único (UUID) para referenciar las transacciones de pago.
- * Esto garantiza que cada solicitud enviada al sistema Janus tenga un rastro único y rastreable.
- */
-function generarUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16).toUpperCase();
-  });
-}
+    /**
+     * FUNCIÓN INIT: El punto de arranque del sistema.
+     * El script detecta si el navegador viene de una redirección de pago exitosa (IPN) o si es una consulta nueva.
+     */
+    async function init() {
+        // El sistema intenta obtener los parámetros de seguridad enviados por Yappy
+        const yappyHash = params.get('hash');
+        const yappyStatus = params.get('status');
+        const yappyOrderId = params.get('orderId');
 
-export default {
-  async fetch(request, env) {
-    // El script configura los encabezados CORS para permitir la interacción segura con el frontend
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    };
-
-    // El sistema gestiona las solicitudes de tipo OPTIONS para cumplir con las políticas de seguridad del navegador
-    if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
-    try {
-      // El motor analiza el cuerpo JSON de la solicitud enviada por el frontend (debug.html)
-      const body = await request.json();
-      const { action, ticket, amount, tariffId, nit, hash, status, orderId } = body;
-
-      // --- FASE 1: AUTENTICACIÓN CON EL SERVIDOR JANUS ---
-      // El script solicita una sesión activa al servidor Janus para obtener el token de autorización temporal
-      const loginRes = await fetch(`https://${JANUS_IP}/janus-integration/api/ext/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(CREDENTIALS)
-      });
-      const loginText = await loginRes.text();
-      // El sistema extrae el token de la respuesta XML recibida mediante una expresión regular
-      const token = loginText.match(/<value>(.*?)<\/value>/)[1];
-
-      // --- FASE 2: OBTENCIÓN DE DATOS DEL TICKET (getData) ---
-      if (action === "getData") {
-        // El script consulta al servidor Janus el estado actual del código de barras
-        const res = await fetch(`https://${JANUS_IP}/janus-integration/api/ext/payment/get/ticketdata`, {
-          method: "POST",
-          headers: { "Janus-TP-Authorization": token, "Content-Type": "application/json" },
-          body: JSON.stringify({ "mediaTypeIdentifier": "barcode", "ticketIdentifier": ticket })
-        });
-        const ticketDataXml = await res.text();
-        
-        // El sistema extrae valores clave del XML como el monto, tiempo de salida y número real del ticket
-        const monto = ticketDataXml.match(/<amountToPay>(.*?)<\/amountToPay>/)?.[1];
-        const paidTimeValue = ticketDataXml.match(/<paidTime>(.*?)<\/paidTime>/)?.[1] || "";
-        const freeExitMins = ticketDataXml.match(/<freeExit>(.*?)<\/freeExit>/)?.[1] || "0";
-        const realTicketNum = ticketDataXml.match(/<ticketNumber>(.*?)<\/ticketNumber>/)?.[1] || ticket;
-
-        // El motor determina si el ticket ya fue pagado previamente para evitar cobros duplicados
-        if (monto === "0" && paidTimeValue !== "" && paidTimeValue !== "0") {
-          return new Response(JSON.stringify({ status: "ALREADY_VALIDATED", remaining: freeExitMins, realTicket: realTicketNum }), 
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        // Si existen parámetros de Yappy, el script inicia el protocolo de validación de Hash
+        if (yappyHash && yappyStatus && yappyOrderId) {
+            document.getElementById('loading-view').innerText = "Validando pago con Yappy...";
+            await verificarPagoYappy(yappyHash, yappyStatus, yappyOrderId);
+            return;
         }
-        // Si no ha sido pagado, el script retorna la información completa del ticket al frontend
-        return new Response(ticketDataXml, { headers: corsHeaders });
-      }
 
-      // --- FASE 3: APLICACIÓN DEL PAGO EN EL HARDWARE (applyPayment) ---
-      if (action === "applyPayment") {
-        const montoNum = parseFloat(amount);
-        // El sistema genera un UUID solo si el monto es mayor a cero (pago real)
-        const uuidFactura = (montoNum > 0) ? generarUUID() : "";
-        const nitFinal = (nit && nit.trim() !== "") ? nit.toUpperCase() : "CF";
-        
-        // El script construye el objeto JSON requerido por la API de Janus para liberar el ticket
-        const applyBody = {
-          "mediaTypeIdentifier": "barcode", "ticketIdentifier": ticket, "amountToPay": montoNum,
-          "calculatedCost": montoNum, "paymentUniqueReferenceId": uuidFactura, "tariffProfileId": parseInt(tariffId),
-          "paymentReceiptInfo": { "receiptPaymentMediaIdentifier": "yappy", "receiptUniqueId": uuidFactura }
-        };
-        
-        // El motor envía la instrucción definitiva de liberación al servidor Janus
-        const res = await fetch(`https://${JANUS_IP}/janus-integration/api/ext/payment/apply`, {
-          method: "POST", headers: { "Janus-TP-Authorization": token, "Content-Type": "application/json" },
-          body: JSON.stringify(applyBody)
-        });
-        const janusResponse = await res.text();
-        // El script retorna la respuesta de Janus, el UUID y el NIT procesado al frontend
-        return new Response(JSON.stringify({ janusResponse, uuidFactura, nitFinal }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
+        // Si no hay datos de Yappy, el script verifica que exista un ticket para consultar
+        if (!ticketParam) { showError("Falta el ticket."); return; }
+        try {
+            // El navegador solicita al Worker los datos económicos del ticket (monto, ID real, etc)
+            const res = await fetch(WORKER_URL, { 
+                method: "POST", 
+                body: JSON.stringify({ action: "getData", ticket: ticketParam }) 
+            });
+            const text = await res.text();
+            document.getElementById('loading-view').style.display = 'none';
 
-      // --- FASE 4: CREACIÓN DE ORDEN EN LA PASARELA YAPPY (createYappyV2Order) ---
-      if (action === "createYappyV2Order") {
-        // El script valida al comercio ante Yappy para obtener un token JWT de sesión
-        const authRes = await fetch(`${YAPPY_UAT_URL}/payments/validate/merchant`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ merchantId: MERCHANT_ID, urlDomain: DOMAIN_URL })
-        });
-        const authData = await authRes.json();
-        const yappyJWT = authData.body.token;
+            // El sistema evalúa si el servidor respondió que el ticket ya fue validado previamente
+            if (text.trim().startsWith('{')) {
+                const data = JSON.parse(text);
+                if (data.status === "ALREADY_VALIDATED") {
+                    showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
+                    return;
+                }
+            }
 
-        // El sistema limpia el número de ticket para cumplir con el límite de 15 caracteres de Yappy (OrderId)
-        let cleanOrderId = ticket.includes('-26') 
-                            ? ticket.split('-26')[1].substring(0, 15) 
-                            : ticket.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
-
-        // El motor realiza los cálculos financieros de subtotal e impuestos (IVA 12%)
-        const totalCobrar = parseFloat(amount);
-        const calculoTaxes = totalCobrar * PORCENTAJE_IMPUESTO;
-        const calculoSubtotal = totalCobrar - calculoTaxes;
-
-        // El script registra la orden de pago en los servidores de Yappy
-        const orderRes = await fetch(`${YAPPY_UAT_URL}/payments/payment-wc`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${yappyJWT}` },
-          body: JSON.stringify({
-            merchantId: MERCHANT_ID,
-            orderId: cleanOrderId,
-            domain: DOMAIN_URL,
-            paymentDate: Math.floor(Date.now() / 1000), 
-            aliasYappy: ALIAS_YAPPY,
-            // El script inyecta el número de ticket real (sin truncar) en la IPN_URL para recuperarlo después
-            ipnUrl: `${IPN_URL}&realTicket=${ticket}`,
-            discount: "0.00",
-            taxes: calculoTaxes.toFixed(2),
-            subtotal: calculoSubtotal.toFixed(2),
-            total: totalCobrar.toFixed(2)
-          })
-        });
-        const orderData = await orderRes.json();
-        
-        // El motor retorna al frontend los tokens necesarios para levantar el componente de pago
-        return new Response(JSON.stringify({
-          transactionId: orderData.body.transactionId,
-          token: orderData.body.token,
-          documentName: orderData.body.documentName,
-          orderId: cleanOrderId
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // --- FASE 5: VERIFICACIÓN DE SEGURIDAD (verifyYappyHash) ---
-      if (action === "verifyYappyHash") {
-        // El script decodifica la clave secreta Base64 y extrae la parte útil del secreto
-        const decodedKey = atob(SECRET_KEY); 
-        const secrete = decodedKey.split('.')[0]; 
-        // El sistema construye la cadena de mensaje original que Yappy usó para firmar
-        const message = orderId + status + DOMAIN_URL;
-
-        // El motor criptográfico importa la clave y genera un HMAC-SHA256 local para comparar
-        const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-            "raw", encoder.encode(secrete),
-            { name: "HMAC", hash: "SHA-256" },
-            false, ["sign"]
-        );
-        const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-        // El sistema convierte el buffer binario en una cadena hexadecimal
-        const localHash = Array.from(new Uint8Array(signatureBuffer))
-                               .map(b => b.toString(16).padStart(2, '0')).join('');
-
-        // El script confirma si el hash generado localmente es idéntico al que mandó Yappy
-        const isLegit = (localHash === hash);
-        return new Response(JSON.stringify({ success: isLegit, status: status }), 
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-    } catch (e) {
-      // El motor captura cualquier excepción y la reporta en formato JSON con código 500
-      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            // Si el ticket está pendiente de pago, el script extrae la información y configura la interfaz
+            if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
+                montoGlobal = text.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
+                ticketRealGlobal = text.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
+                tariffIdGlobal = text.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
+                
+                document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
+                document.getElementById('ticket-id').innerText = ticketRealGlobal;
+                document.getElementById('payment-view').style.display = 'block';
+                setupYappy();
+            } else { showError("Ticket no reconocido."); }
+        } catch (e) { showError("Error de conexión."); }
     }
-  }
-};
+
+    /**
+     * FUNCIÓN VERIFICARPAGOYAPPY: El script recupera el número real del ticket
+     * para asegurar que el proceso de liberación en Janus sea exitoso.
+     */
+    async function verificarPagoYappy(hash, status, orderId) {
+        // El script extrae el ticket real que inyectamos previamente en la IPN_URL del Worker
+        const realTicketFromUrl = params.get('realTicket');
+
+        try {
+            // El navegador le pide al Worker que compruebe si el Hash de Yappy es legítimo
+            const res = await fetch(WORKER_URL, {
+                method: "POST",
+                body: JSON.stringify({ action: "verifyYappyHash", hash, status, orderId })
+            });
+            const data = await res.json();
+
+            // Si el Hash es real y el status es exitoso (E), el sistema procede a la liberación
+            if (data.success && data.status === 'E') {
+                // El sistema recupera el ticket completo original para Janus
+                ticketRealGlobal = realTicketFromUrl || orderId; 
+                liberarJanus();
+            } else { showError("La validación de pago falló o fue cancelada."); }
+        } catch (e) { showError("Error al validar con el servidor."); }
+    }
+
+    /**
+     * FUNCIÓN SETUPYAPPY: Gestiona el comportamiento del botón de pago dinámico.
+     */
+    function setupYappy() {
+        const container = document.getElementById('yappy-container');
+        // El script genera un botón simple si el cobro es de Q0.00
+        if (parseFloat(montoGlobal) <= 0) {
+            container.innerHTML = `<button onclick="liberarJanus()" style="width:100%; max-width:280px; padding:16px; border-radius:12px; background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">VALIDAR GRATIS</button>`;
+            document.getElementById('yappy-overlay').style.display = 'none';
+        } else {
+            // Si hay deuda, el sistema inicializa el componente de Yappy en modo deshabilitado
+            container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
+            const btn = document.querySelector('btn-yappy');
+            // Al hacer clic, el script solicita al Worker crear la orden oficial de Yappy
+            btn.addEventListener("eventClick", async () => {
+                const res = await fetch(WORKER_URL, { 
+                    method: "POST", 
+                    body: JSON.stringify({ action: "createYappyV2Order", ticket: ticketRealGlobal, amount: montoGlobal }) 
+                });
+                const data = await res.json();
+                // El sistema pasa los tokens de la orden al botón para abrir la billetera del cliente
+                btn.eventPayment({ transactionId: data.transactionId, token: data.token, documentName: data.documentName });
+            });
+            // Al detectar éxito en el componente, el script dispara la liberación
+            btn.addEventListener("eventSuccess", () => liberarJanus());
+        }
+    }
+
+    /**
+     * FUNCIÓN VALIDARFORM: Bloquea o desbloquea el pago según la validez del NIT y Correo.
+     */
+    function validarForm() {
+        const nit = document.getElementById('nit').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const btn = document.querySelector('btn-yappy');
+        const overlay = document.getElementById('yappy-overlay');
+        // El sistema usa expresiones regulares para asegurar formatos de datos correctos
+        const esValido = /^([0-9]+|[Cc][Ff])$/.test(nit) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (btn) {
+            btn.setAttribute('is-disabled', !esValido);
+            btn.style.opacity = esValido ? "1" : "0.4";
+            overlay.style.display = esValido ? "none" : "block";
+        }
+    }
+
+    /**
+     * FUNCIÓN LIBERARJANUS: El paso final donde el sistema sincroniza con el hardware físico.
+     */
+    async function liberarJanus() {
+        // El script muestra estados de carga y oculta el formulario de pago
+        document.getElementById('loading-view').style.display = 'block';
+        document.getElementById('loading-view').innerText = "Sincronizando...";
+        document.getElementById('payment-view').style.display = 'none';
+        
+        const nitValue = document.getElementById('nit')?.value || "CF";
+
+        // El navegador ordena al Worker aplicar definitivamente el pago en Janus
+        const res = await fetch(WORKER_URL, { 
+            method: "POST", 
+            body: JSON.stringify({ action: "applyPayment", ticket: ticketRealGlobal, amount: montoGlobal, tariffId: tariffIdGlobal, nit: nitValue }) 
+        });
+        const data = await res.json();
+        
+        // Tras recibir el OK de Janus, el sistema realiza una consulta de verificación final
+        if (data.janusResponse.includes("<status>OK</status>")) {
+            const updateRes = await fetch(WORKER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal })
+            });
+            let tiempoFinal = "15";
+            const updateText = await updateRes.text();
+            // El script actualiza los minutos de gracia reales devueltos por el servidor
+            if (updateText.trim().startsWith('{')) {
+                const updateData = JSON.parse(updateText);
+                if (updateData.status === "ALREADY_VALIDATED") tiempoFinal = updateData.remaining;
+            }
+            // El sistema muestra la pantalla final de agradecimiento
+            showSuccess(ticketRealGlobal, tiempoFinal, "PAGO EXITOSO");
+        }
+    }
+
+    /**
+     * FUNCIÓN SHOWSUCCESS: Configura visualmente la vista de éxito.
+     */
+    function showSuccess(id, mins, title) {
+        document.getElementById('header-title').innerText = title;
+        document.getElementById('loading-view').style.display = 'none';
+        document.getElementById('success-view').style.display = 'block';
+        document.getElementById('ticket-final-id').innerText = `ID: ${id}`;
+        document.getElementById('mins-qty').innerText = mins;
+    }
+
+    /**
+     * FUNCIÓN SHOWERROR: Muestra mensajes de advertencia al usuario.
+     */
+    function showError(msg) {
+        document.getElementById('loading-view').style.display = 'none';
+        document.getElementById('payment-view').style.display = 'block';
+        document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
+    }
+
+    // El sistema inicia la ejecución una vez que el navegador termina de cargar el HTML
+    window.onload = init;
+</script>
+</body>
+</html>
