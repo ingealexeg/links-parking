@@ -150,7 +150,7 @@
         //const nombreArchivoDestino = "yappy.html"; 
         
         if (rawData !== 'SIN-DATA') {
-            window.location.href = `https://ingealexeg.github.io/links-parking/yappy.html?ticket=${rawData}`;
+            window.location.href = `https://ingealexeg.github.io/links-parking/debug.html?ticket=${rawData}`;
         } else {
             alert("No se detectó un ticket válido para procesar el pago.");
         }
@@ -162,12 +162,13 @@
     }
 
     function goWompi() {
-        // Enlace simulacion temporal para Wompi
-        window.location.href = `https://pagos.wompi.com.gt/checkout?ref=${rawData}&amount=${montoFinal}`;
+        // Enlace simulacion temporal para Wompi prueba que ya hacemos procedimiento get/ticketdata y /apply
+        window.location.href = `https://ingealexeg.github.io/links-parking/yappy.html?ticket=${rawData}`;
     }
 </script>
 </body>
 </html>
+
 
 
 
