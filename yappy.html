@@ -21,7 +21,6 @@
 
     .ticket-info { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #888; margin-bottom: 12px; word-break: break-all; text-align: center; }
 
-    /* Bloque de tiempo de uso */
     .time-in-parking {
       background: #eef6ff;
       border: 1px solid #cfe6ff;
@@ -68,13 +67,11 @@
 
       <div class="ticket-info"><strong>Ticket ID:</strong> <span id="ticket-id">Cargando...</span></div>
 
-      <!-- Bloque de tiempo (se pinta con el primer getData) -->
       <div class="time-in-parking" id="parking-time-box">
         <div class="time-title">Tiempo de uso de parqueo</div>
         <div class="time-row"><span>Entrada:</span> <span id="entrada-hora">--/--/---- --:--:--</span></div>
         <div class="time-row"><span>Consulta:</span> <span id="consulta-hora">--/--/---- --:--:--</span></div>
         <div class="time-row"><span><b>Duración:</b></span> <span id="tiempo-total"><b>--:--:--</b></span></div>
-        <!-- ✅ NUEVO: último pago si existe -->
         <div class="time-row" id="row-ultimo-pago" style="display:none;"><span>Último pago:</span> <span id="ultimo-pago">--/--/---- --:--:--</span></div>
       </div>
 
@@ -96,7 +93,6 @@
 </div>
 
 <script>
-  // Variables de entorno y captura de parámetros de la URL
   const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
   const ticketParam = new URLSearchParams(window.location.search).get('ticket');
 
@@ -110,8 +106,8 @@
   function normalizeEpochMs(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n <= 0) return 0;
-    if (String(Math.trunc(n)).length <= 10) return n * 1000; // sec -> ms
-    return n; // ya ms
+    if (String(Math.trunc(n)).length <= 10) return n * 1000;
+    return n;
   }
 
   function fmtFechaHora(epochMs) {
@@ -141,7 +137,6 @@
     document.getElementById("consulta-hora").innerText = fmtFechaHora(nowEpochMs);
     document.getElementById("tiempo-total").innerText = fmtHHMMSS(diffMs);
 
-    // ✅ NUEVO: pintar último pago si existe
     const paidMs = normalizeEpochMs(paidEpochMs);
     if (paidMs > 0) {
       document.getElementById("ultimo-pago").innerText = fmtFechaHora(paidMs);
@@ -180,18 +175,15 @@
 
       const resultText = await response.text();
 
-      // Caso JSON (ALREADY_VALIDATED)
       if (resultText.trim().startsWith("{")) {
         const data = JSON.parse(resultText);
         if (data.status === "ALREADY_VALIDATED") {
-          // ✅ pintar tiempo con lo que ya viene del worker (incluye paidEpochMs)
           pintarTiempo(Number(data.entryEpochMs), Number(data.nowEpochMs), Number(data.paidEpochMs || 0));
           mostrarExito("TICKET YA VALIDADO", data.realTicket, data.remaining);
           return;
         }
       }
 
-      // Caso XML
       if (resultText.includes("<status>OK</status>") || resultText.includes("<status>ok</status>")) {
         const nowEpochMs = Date.now();
 
@@ -200,7 +192,7 @@
         tariffIdGlobal = xmlTag(resultText, "tariffProfileId") || 10;
 
         const entryEpochMs = normalizeEpochMs(xmlTag(resultText, "entryTimestamp"));
-        const paidEpochMs = normalizeEpochMs(xmlTag(resultText, "paidTime")); // ✅ NUEVO
+        const paidEpochMs = normalizeEpochMs(xmlTag(resultText, "paidTime"));
         pintarTiempo(entryEpochMs, nowEpochMs, paidEpochMs);
 
         montoDiv.innerText = `$${montoGlobal}`;
