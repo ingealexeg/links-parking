@@ -62,7 +62,7 @@
 
     <div id="payment-view" style="display:none;">
       <div class="total-label">Total a Pagar</div>
-      <div id="monto-display" class="amount">Q --.--</div>
+      <div id="monto-display" class="amount">$ --.--</div>
 
       <div class="ticket-id-box">Ticket ID: <span id="ticket-id">---</span></div>
 
@@ -258,7 +258,7 @@
         const paidEpochMs = normalizeEpochMs(xmlTag(text, "paidTime")); // ✅ NUEVO
 
         // Se pintan datos antes de mostrar la vista para evitar “salto” visual
-        document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
+        document.getElementById('monto-display').innerText = `$${montoGlobal}`;
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
         pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
 
