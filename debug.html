@@ -6,8 +6,6 @@
   <title>TAS | Detalle de Pago</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
-
-  <!-- Se carga el web component del Botón de Pago Yappy (ambiente UAT) -->
   <script type="module" src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
 
   <style>
@@ -18,14 +16,23 @@
     .header h2 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
     .content { padding: 35px 25px; }
     .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px; }
-    .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 20px; }
+    .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 18px; }
     .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 12px; }
 
-    /* NUEVO: Caja de tiempo dentro del parqueo */
-    .time-in-parking { background: #eef6ff; border: 1px solid #cfe6ff; color: #2c4a66; padding: 12px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 25px; text-align: left; }
-    .time-in-parking b { color: #1f95f0; }
+    /* Bloque de tiempo mejorado */
+    .time-in-parking {
+      background: #eef6ff;
+      border: 1px solid #cfe6ff;
+      color: #2c4a66;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      margin-bottom: 22px;
+      text-align: left;
+      display: none;
+    }
     .time-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
-    .time-row span { white-space: nowrap; }
+    .time-title { font-weight: 700; color: #1f95f0; margin-bottom: 6px; }
 
     .form-group { text-align: left; margin-bottom: 15px; }
     label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
@@ -56,11 +63,12 @@
 
       <div class="ticket-id-box">Ticket ID: <span id="ticket-id">---</span></div>
 
-      <!-- NUEVO: Bloque de tiempo en parqueo -->
-      <div class="time-in-parking" id="parking-time-box" style="display:none;">
-        <div class="time-row"><span>Entrada:</span> <span id="entrada-hora">--:--</span></div>
-        <div class="time-row"><span>Consulta:</span> <span id="consulta-hora">--:--</span></div>
-        <div class="time-row"><span><b>Tiempo:</b></span> <span id="tiempo-total"><b>--</b></span></div>
+      <!-- Tiempo dentro del parqueo -->
+      <div class="time-in-parking" id="parking-time-box">
+        <div class="time-title">Tiempo de uso de parqueo</div>
+        <div class="time-row"><span>Entrada:</span> <span id="entrada-dt">--/--/---- --:--:--</span></div>
+        <div class="time-row"><span>Consulta:</span> <span id="consulta-dt">--/--/---- --:--:--</span></div>
+        <div class="time-row"><span><b>Duración:</b></span> <span id="tiempo-uso"><b>--:--:--</b></span></div>
       </div>
 
       <div class="form-group">
@@ -91,20 +99,13 @@
 </div>
 
 <script>
-  // Se define la dirección del Worker y captura parámetros de la URL
   const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
   const params = new URLSearchParams(window.location.search);
   const ticketParam = params.get('ticket');
 
-  // Variables globales para persistir los datos durante la sesión del usuario
   let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
-
-  // Bandera de seguridad para impedir ejecuciones duplicadas
   let liberando = false;
 
-  /**
-   * Se hace un POST al Worker con JSON (helper común).
-   */
   async function postWorker(payload) {
     const res = await fetch(WORKER_URL, {
       method: "POST",
@@ -112,65 +113,56 @@
       body: JSON.stringify(payload)
     });
     const text = await res.text();
-
-    // Se intenta parsear a JSON si aplica
-    if (text.trim().startsWith("{")) {
-      return { ok: res.ok, status: res.status, json: JSON.parse(text) };
-    }
+    if (text.trim().startsWith("{")) return { ok: res.ok, status: res.status, json: JSON.parse(text) };
     return { ok: res.ok, status: res.status, text };
   }
 
-  /**
-   * Se formatea una fecha epoch(ms) a hora local legible.
-   */
-  function fmtHora(epochMs) {
-    if (!epochMs) return "--:--";
+  // Se extrae un tag XML (entryTimestamp, etc.) sin parser pesado
+  function xmlTag(xml, tag) {
+    const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "i");
+    return xml.match(re)?.[1] ?? "";
+  }
+
+  // Se normaliza epoch ms: si viene en segundos (10 dígitos), se convierte a ms.
+  function normalizeEpochMs(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (String(Math.trunc(n)).length <= 10) return n * 1000;
+    return n;
+  }
+
+  // Se formatea fecha+hora local
+  function fmtFechaHora(epochMs) {
+    if (!epochMs) return "--/--/---- --:--:--";
     return new Intl.DateTimeFormat('es-GT', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(new Date(epochMs));
   }
 
-  /**
-   * Se convierte milisegundos a un texto tipo "2h 15m".
-   */
-  function fmtDuracion(ms) {
-    if (!ms || ms < 0) return "--";
+  // Se formatea duración como HH:MM:SS (horas puede ser > 24)
+  function fmtHHMMSS(ms) {
+    if (!ms || ms < 0) return "--:--:--";
     const totalSec = Math.floor(ms / 1000);
     const h = Math.floor(totalSec / 3600);
     const m = Math.floor((totalSec % 3600) / 60);
     const s = totalSec % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
+    const pad = (x) => String(x).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
   }
 
-  /**
-   * Se pinta el bloque "Tiempo en parqueo" llamando al Worker para obtener entryTimestamp y now.
-   */
-  async function cargarYMostrarTiempo(ticket) {
-    try {
-      const r = await postWorker({ action: "getTicketTimes", ticket });
-      if (!r.ok || !r.json) return;
+  // Se pinta el bloque de tiempo (sin esperar otra llamada)
+  function pintarTiempoEnParqueo(entryEpochMs, nowEpochMs) {
+    if (!entryEpochMs) return;
+    const diffMs = nowEpochMs - entryEpochMs;
 
-      const { entryEpochMs, nowEpochMs, diffMs } = r.json;
+    document.getElementById("entrada-dt").innerText = fmtFechaHora(entryEpochMs);
+    document.getElementById("consulta-dt").innerText = fmtFechaHora(nowEpochMs);
+    document.getElementById("tiempo-uso").innerText = fmtHHMMSS(diffMs);
 
-      // Si no hay entryTimestamp, se oculta el bloque
-      if (!entryEpochMs) return;
-
-      document.getElementById("entrada-hora").innerText = fmtHora(entryEpochMs);
-      document.getElementById("consulta-hora").innerText = fmtHora(nowEpochMs);
-      document.getElementById("tiempo-total").innerText = fmtDuracion(diffMs);
-
-      document.getElementById("parking-time-box").style.display = "block";
-    } catch (_) {
-      // Si falla, no se rompe el flujo principal
-    }
+    document.getElementById("parking-time-box").style.display = "block";
   }
 
-  /**
-   * FUNCIÓN INIT: Punto de arranque del sistema.
-   * Se detecta si el navegador viene con parámetros de IPN (hash/status/orderId/domain).
-   */
   async function init() {
     const yappyHash = params.get('hash');
     const yappyStatus = params.get('status');
@@ -195,12 +187,14 @@
       const text = await res.text();
       document.getElementById('loading-view').style.display = 'none';
 
-      // Caso JSON: ticket ya validado
+      // Caso JSON: ALREADY_VALIDATED (si tu worker lo devuelve)
       if (text.trim().startsWith('{')) {
         const data = JSON.parse(text);
         if (data.status === "ALREADY_VALIDATED") {
-          // Se muestra el tiempo en parqueo (antes de saltar a éxito igual se puede pintar)
-          await cargarYMostrarTiempo(data.realTicket || ticketParam);
+          // Si el JSON trae entryEpochMs/nowEpochMs, se pinta con eso; si no, se omite.
+          if (data.entryEpochMs && data.nowEpochMs) {
+            pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs));
+          }
           showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
           return;
         }
@@ -208,17 +202,21 @@
 
       // Caso XML: ticket pendiente
       if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
-        montoGlobal = text.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
-        ticketRealGlobal = text.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
-        tariffIdGlobal = text.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
+        const nowEpochMs = Date.now();
 
+        montoGlobal = xmlTag(text, "amountToPay");
+        ticketRealGlobal = xmlTag(text, "ticketNumber") || ticketParam;
+        tariffIdGlobal = xmlTag(text, "tariffProfileId") || 10;
+
+        // Se toma entryTimestamp del MISMO XML
+        const entryEpochMs = normalizeEpochMs(xmlTag(text, "entryTimestamp"));
+
+        // Se pintan todos los datos antes de mostrar la vista (evita “salto feo”)
         document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
+        pintarTiempoEnParqueo(entryEpochMs, nowEpochMs);
+
         document.getElementById('payment-view').style.display = 'block';
-
-        // NUEVO: se pinta el tiempo dentro del parqueo
-        await cargarYMostrarTiempo(ticketRealGlobal);
-
         setupYappy();
       } else {
         showError("Ticket no reconocido.");
@@ -228,15 +226,10 @@
     }
   }
 
-  /**
-   * FUNCIÓN VERIFICARPAGOYAPPY: Se valida el hash desde el backend (Worker) usando el algoritmo oficial.
-   */
   async function verificarPagoYappy(hash, status, orderId, domain) {
     const realTicketFromUrl = params.get('realTicket');
-
     try {
       const result = await postWorker({ action: "verifyYappyHash", hash, status, orderId, domain });
-
       if (!result.ok) { showError(`Error validando con servidor (HTTP ${result.status}).`); return; }
       const data = result.json;
 
@@ -244,12 +237,7 @@
         ticketRealGlobal = realTicketFromUrl || orderId;
         await liberarJanus();
       } else {
-        const map = {
-          "R": "Pago rechazado (no confirmado a tiempo).",
-          "C": "Pago cancelado por el cliente.",
-          "X": "Pago expirado (no iniciado a tiempo).",
-          "E": "Pago ejecutado pero no validado localmente."
-        };
+        const map = { "R":"Pago rechazado.", "C":"Pago cancelado.", "X":"Pago expirado.", "E":"Pago ejecutado pero no validado." };
         showError(map[status] || "La validación de pago falló o fue cancelada.");
       }
     } catch (e) {
@@ -257,9 +245,6 @@
     }
   }
 
-  /**
-   * FUNCIÓN SETUPYAPPY: Gestiona el comportamiento del botón de pago dinámico.
-   */
   function setupYappy() {
     const container = document.getElementById('yappy-container');
 
@@ -281,12 +266,7 @@
       try {
         btn.isButtonLoading = true;
 
-        const result = await postWorker({
-          action: "createYappyV2Order",
-          ticket: ticketRealGlobal,
-          amount: montoGlobal
-        });
-
+        const result = await postWorker({ action: "createYappyV2Order", ticket: ticketRealGlobal, amount: montoGlobal });
         if (!result.ok) {
           const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
           showError(err);
@@ -295,20 +275,10 @@
         }
 
         const data = result.json;
-        if (data.error) {
-          showError(data.error);
-          btn.isButtonLoading = false;
-          return;
-        }
+        if (data.error) { showError(data.error); btn.isButtonLoading = false; return; }
 
-        btn.eventPayment({
-          transactionId: data.transactionId,
-          token: data.token,
-          documentName: data.documentName
-        });
-
+        btn.eventPayment({ transactionId: data.transactionId, token: data.token, documentName: data.documentName });
         btn.isButtonLoading = false;
-
       } catch (e) {
         btn.isButtonLoading = false;
         showError("Error creando orden con Yappy.");
@@ -317,18 +287,16 @@
 
     btn.addEventListener("eventSuccess", async (event) => {
       if (liberando) return;
-
       const d = event?.detail || {};
       if (d.hash && d.status && d.orderId && d.domain) {
         document.getElementById('loading-view').style.display = 'block';
         document.getElementById('loading-view').innerText = "Confirmando pago...";
         document.getElementById('payment-view').style.display = 'none';
         await verificarPagoYappy(d.hash, d.status, d.orderId, d.domain);
-        return;
+      } else {
+        document.getElementById('loading-view').style.display = 'block';
+        document.getElementById('loading-view').innerText = "Pago exitoso. Confirmando...";
       }
-
-      document.getElementById('loading-view').style.display = 'block';
-      document.getElementById('loading-view').innerText = "Pago exitoso. Confirmando...";
     });
 
     btn.addEventListener("eventError", (event) => {
@@ -339,9 +307,6 @@
     });
   }
 
-  /**
-   * FUNCIÓN VALIDARFORM: Bloquea o desbloquea el pago según la validez del NIT y Correo.
-   */
   function validarForm() {
     const nit = document.getElementById('nit').value.trim();
     const email = document.getElementById('email').value.trim();
@@ -357,9 +322,6 @@
     }
   }
 
-  /**
-   * FUNCIÓN LIBERARJANUS: Aplica pago y valida ticket.
-   */
   async function liberarJanus() {
     if (liberando) return;
     liberando = true;
@@ -379,12 +341,7 @@
         nit: nitValue
       });
 
-      if (!result.ok) {
-        showError(`Error aplicando pago (HTTP ${result.status}).`);
-        liberando = false;
-        return;
-      }
-
+      if (!result.ok) { showError(`Error aplicando pago (HTTP ${result.status}).`); liberando = false; return; }
       const data = result.json;
 
       if (data.janusResponse && data.janusResponse.includes("<status>OK</status>")) {
