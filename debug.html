@@ -1,99 +1,24 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <!-- Se define el set de caracteres UTF-8 para soportar correctamente acentos y caracteres en español. -->
   <meta charset="UTF-8">
-
-  <!-- Se hace que la página sea responsive en móviles (escala y ancho del viewport). -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Se define el título que verá el usuario en la pestaña del navegador. -->
   <title>TAS | Detalle de Pago</title>
 
-  <!-- Se importa la fuente Montserrat desde Google Fonts para una apariencia moderna y consistente. -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
-
-  <!--
-    Se carga el Web Component oficial del botón Yappy (ambiente UAT).
-    Este componente es el que renderiza el botón y gestiona el modal/flujo de pago con Yappy.
-  -->
   <script type="module" src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
 
   <style>
-    /* Se definen variables CSS para colores corporativos y reutilización simple. */
     :root { --tas-blue: #1f95f0; --tas-accent: #e88d43; --tas-green: #28a745; --tas-light-green: #e9f5f0; }
-
-    /* Se configura el body para centrar el contenido vertical y horizontalmente en toda la pantalla. */
-    body {
-      font-family: 'Montserrat', sans-serif;
-      background: #f8f9fa;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-    }
-
-    /* Se define el “card layout” principal donde vive todo el flujo. */
-    .card {
-      background: white;
-      width: 92%;
-      max-width: 400px;
-      border-radius: 20px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-      overflow: hidden;
-      text-align: center;
-    }
-
-    /* Se define la franja superior (header) con color primario. */
-    .header {
-      background: var(--tas-blue);
-      padding: 20px;
-      color: white;
-      border-bottom: 4px solid var(--tas-accent);
-    }
-
-    /* Se estiliza el título dentro del header. */
-    .header h2 {
-      margin: 0;
-      font-size: 1.2rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    /* Se define el padding interno del contenido. */
+    body { font-family: 'Montserrat', sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .card { background: white; width: 92%; max-width: 400px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; text-align: center; }
+    .header { background: var(--tas-blue); padding: 20px; color: white; border-bottom: 4px solid var(--tas-accent); }
+    .header h2 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
     .content { padding: 35px 25px; }
+    .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px; }
+    .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 18px; }
+    .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 12px; }
 
-    /* Etiqueta pequeña para “Total a Pagar”. */
-    .total-label {
-      color: #888;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-
-    /* Monto grande y destacado. */
-    .amount {
-      font-size: 3.2rem;
-      font-weight: 700;
-      color: var(--tas-blue);
-      margin-bottom: 18px;
-    }
-
-    /* Caja con el ticket ID para fácil lectura. */
-    .ticket-id-box {
-      background: #f1f3f5;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 0.85rem;
-      color: #666;
-      margin-bottom: 12px;
-    }
-
-    /*
-      Se define el bloque de “Tiempo de uso de parqueo”.
-      Inicialmente viene oculto (display:none) y se muestra cuando se dispone de timestamps.
-    */
     .time-in-parking {
       background: #eef6ff;
       border: 1px solid #cfe6ff;
@@ -105,230 +30,119 @@
       text-align: left;
       display: none;
     }
-
-    /* Cada fila de tiempo se organiza en dos columnas (etiqueta y valor). */
     .time-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
-
-    /* Título interno del bloque de tiempo. */
     .time-title { font-weight: 700; color: #1f95f0; margin-bottom: 6px; }
 
-    /* Grupo de formulario para inputs. */
     .form-group { text-align: left; margin-bottom: 15px; }
-
-    /* Estilo de labels del formulario. */
     label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
+    input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
 
-    /* Estilo de inputs (NIT / correo). */
-    input {
-      width: 100%;
-      padding: 14px;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      box-sizing: border-box;
-      font-size: 1rem;
-      font-family: inherit;
-    }
-
-    /*
-      Wrapper del botón Yappy: se usa para posicionar un overlay encima.
-      El overlay impide clics cuando el formulario no es válido.
-    */
     #yappy-wrapper { margin-top: 25px; position: relative; width: 100%; display: center; justify-content: center; }
-
-    /* Overlay invisible (pero “clickeable”) para bloquear interacción. */
-    #yappy-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 10;
-      cursor: not-allowed;
-      display: block;
-    }
-
-    /* Se define el ancho del componente <btn-yappy> y un estado visual “deshabilitado” con opacidad. */
+    #yappy-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: not-allowed; display: block; }
     btn-yappy { width: 100% !important; max-width: 300px; display: block; opacity: 0.4; transition: opacity 0.3s ease; }
 
-    /* Icono grande para la vista de éxito. */
     .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
-
-    /* Texto del ticket en vista final. */
     .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
-
-    /* Caja de minutos de salida (freeExit) en la vista final. */
-    .time-box {
-      background: var(--tas-light-green);
-      color: #2d5a4c;
-      padding: 20px;
-      border-radius: 12px;
-      border: 1px solid #d4edda;
-      margin-bottom: 30px;
-      font-size: 1rem;
-      line-height: 1.4;
-    }
-
-    /* Texto de agradecimiento al final. */
+    .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
     .footer-thanks { color: #aaa; font-size: 0.85rem; }
-
-    /* Vista de carga. */
     .loading { color: var(--tas-accent); font-weight: 600; padding: 20px; }
-
-    /* Mensajes de error. */
     .error-msg { color: #dc3545; font-weight: 600; margin-top: 15px; font-size: 0.9rem; }
   </style>
 </head>
 
 <body>
-  <!-- Se crea la tarjeta principal que contiene todo el flujo. -->
   <div class="card">
-
-    <!-- Se define el header y se asigna un id para cambiar el título dinámicamente (Pago exitoso / Ticket validado). -->
     <div class="header">
       <h2 id="header-title">Detalle de Pago</h2>
     </div>
 
-    <!-- Contenedor general del contenido con id para manipulación si fuese necesario. -->
     <div class="content" id="main-content">
-
-      <!-- Vista de carga inicial: se muestra mientras se consulta el ticket al servidor. -->
       <div id="loading-view" class="loading">Consultando servidor...</div>
 
-      <!-- Vista principal de pago: inicia oculta y se muestra al obtener datos válidos del ticket. -->
       <div id="payment-view" style="display:none;">
-
-        <!-- Etiqueta y monto a pagar. -->
         <div class="total-label">Total a Pagar</div>
         <div id="monto-display" class="amount">$ --.--</div>
 
-        <!-- Se muestra el ticket id real del sistema (ticketNumber o el ticket de la URL). -->
         <div class="ticket-id-box">
           Ticket ID: <span id="ticket-id">---</span>
         </div>
 
-        <!--
-          Bloque informativo de tiempo.
-          Se carga con el primer getData para evitar “saltos” visuales.
-          También incluye la fila “Último pago” que solo se muestra si existe paidTime.
-        -->
         <div class="time-in-parking" id="parking-time-box">
           <div class="time-title">Tiempo de uso de parqueo</div>
-
-          <!-- Fecha y hora de entrada, tomada de entryTimestamp. -->
           <div class="time-row"><span>Entrada:</span> <span id="entrada-dt">--/--/---- --:--:--</span></div>
-
-          <!-- Fecha y hora de consulta, basada en la hora local del navegador en el momento de consultar. -->
           <div class="time-row"><span>Consulta:</span> <span id="consulta-dt">--/--/---- --:--:--</span></div>
-
-          <!-- Duración: diferencia entre “consulta” y “entrada”, mostrada en HH:MM:SS. -->
           <div class="time-row"><span><b>Duración:</b></span> <span id="tiempo-uso"><b>--:--:--</b></span></div>
-
-          <!--
-            Fila opcional: “Último pago”.
-            Se deja oculta (display:none) y se habilita solo si paidTime existe y es válido.
-          -->
           <div class="time-row" id="row-ultimo-pago" style="display:none;">
             <span>Último pago:</span> <span id="ultimo-pago-dt">--/--/---- --:--:--</span>
           </div>
         </div>
 
-        <!-- Campo para NIT: se usa para habilitar el botón Yappy cuando el formulario sea válido. -->
         <div class="form-group">
           <label>NIT *</label>
           <input type="text" id="nit" placeholder="CF o NIT" onkeyup="validarForm()">
         </div>
 
-        <!-- Campo para correo: se valida igual que NIT para habilitar botón Yappy. -->
         <div class="form-group">
           <label>Correo Electrónico *</label>
           <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
         </div>
 
-        <!--
-          Contenedor del botón Yappy:
-          - yappy-overlay bloquea clics cuando el formulario está incompleto
-          - yappy-container es donde se inserta el <btn-yappy> o el botón “VALIDAR GRATIS”
-        -->
         <div id="yappy-wrapper">
           <div id="yappy-overlay"></div>
           <div id="yappy-container"></div>
         </div>
 
-        <!-- Contenedor para errores (por ejemplo, fallas al crear orden o validación). -->
         <div id="error-container"></div>
       </div>
 
-      <!-- Vista de éxito: inicia oculta y se muestra cuando Janus confirma pago/validación. -->
       <div id="success-view" style="display:none;">
         <span class="check-icon">✓</span>
-
-        <!-- Ticket final mostrado al usuario. -->
         <span class="ticket-final" id="ticket-final-id">ID: ---</span>
-
-        <!-- Minutos disponibles para salir (freeExit) devueltos por el worker. -->
         <div class="time-box">
           Tiene <b id="mins-qty">--</b> <b>minutos</b> para salir de las instalaciones.
         </div>
-
         <div class="footer-thanks">¡Gracias por su visita!</div>
       </div>
     </div>
   </div>
 
 <script>
-  // Se define la URL del Worker (backend intermedio) que habla con Janus y Yappy.
   const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
-
-  // Se capturan parámetros de URL: ticket (para consultar) y/o parámetros IPN de Yappy (hash/status/orderId/domain).
   const params = new URLSearchParams(window.location.search);
   const ticketParam = params.get('ticket');
 
-  // Se definen variables globales para mantener el estado del ticket durante la sesión.
   let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
-
-  // Se define bandera para impedir ejecuciones duplicadas (evita doble apply en eventos repetidos).
   let liberando = false;
-
-  // Se guarda entryTimestamp convertido a epoch ms para tenerlo disponible si se quisiera recalcular.
   let entryEpochMsGlobal = 0;
 
-  /**
-   * Esta función encapsula un POST al Worker.
-   * - Envía JSON.
-   * - Lee la respuesta como texto.
-   * - Si parece JSON (empieza con "{"), lo parsea y devuelve {json}.
-   * - Si no, devuelve {text} para procesar XML.
-   */
+  // ✅ Flag anti “doble apply” si eventSuccess libera y luego el navegador refresca y entra por IPN
+  function appliedKey() {
+    // si existe ticket real, se usa para la llave; si no, se usa orderId (en modo IPN)
+    const orderId = params.get('orderId') || "";
+    const t = ticketRealGlobal || ticketParam || orderId || "unknown";
+    return `tas_applied_${t}`;
+  }
+  function markApplied() { sessionStorage.setItem(appliedKey(), "1"); }
+  function isApplied() { return sessionStorage.getItem(appliedKey()) === "1"; }
+
   async function postWorker(payload) {
     const res = await fetch(WORKER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-
     const text = await res.text();
-
     if (text.trim().startsWith("{")) {
       return { ok: res.ok, status: res.status, json: JSON.parse(text) };
     }
-
     return { ok: res.ok, status: res.status, text };
   }
 
-  /**
-   * Extrae el contenido de un tag XML de forma rápida usando RegEx.
-   * Ej: xmlTag("<amountToPay>10</amountToPay>", "amountToPay") -> "10"
-   */
   function xmlTag(xml, tag) {
     const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "i");
     return xml.match(re)?.[1] ?? "";
   }
 
-  /**
-   * Normaliza timestamps para trabajar siempre en milisegundos.
-   * - Si viene en segundos (10 dígitos o menos), lo convierte a ms multiplicando por 1000.
-   * - Si ya viene en ms, lo deja igual.
-   */
   function normalizeEpochMs(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n <= 0) return 0;
@@ -336,10 +150,6 @@
     return n;
   }
 
-  /**
-   * Formatea un epoch ms como fecha+hora local (formato es-GT).
-   * Ejemplo esperado: "04/02/2026 09:15:10" (según navegador).
-   */
   function fmtFechaHora(epochMs) {
     if (!epochMs) return "--/--/---- --:--:--";
     return new Intl.DateTimeFormat('es-GT', {
@@ -348,10 +158,6 @@
     }).format(new Date(epochMs));
   }
 
-  /**
-   * Formatea una duración en milisegundos a HH:MM:SS.
-   * Se permite que horas sea > 24, porque el carro puede estar varios días.
-   */
   function fmtHHMMSS(ms) {
     if (!Number.isFinite(ms) || ms < 0) return "--:--:--";
     const totalSec = Math.floor(ms / 1000);
@@ -362,28 +168,16 @@
     return `${pad(h)}:${pad(m)}:${pad(s)}`;
   }
 
-  /**
-   * Pinta en pantalla el bloque “Tiempo de uso de parqueo”.
-   * - Usa entryEpochMs para “Entrada”.
-   * - Usa nowEpochMs para “Consulta”.
-   * - Calcula diferencia para “Duración”.
-   * - Si paidEpochMs existe, muestra la fila “Último pago”.
-   */
   function pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs) {
     if (!entryEpochMs) return;
 
-    // Se guarda el entry timestamp para potenciales usos futuros.
     entryEpochMsGlobal = entryEpochMs;
 
-    // Se calcula el tiempo total dentro del parqueo.
     const diffMs = nowEpochMs - entryEpochMs;
-
-    // Se pintan valores ya formateados.
     document.getElementById("entrada-dt").innerText = fmtFechaHora(entryEpochMs);
     document.getElementById("consulta-dt").innerText = fmtFechaHora(nowEpochMs);
     document.getElementById("tiempo-uso").innerText = fmtHHMMSS(diffMs);
 
-    // Se normaliza y pinta el “último pago” solo si es válido.
     const paidMs = normalizeEpochMs(paidEpochMs);
     if (paidMs > 0) {
       document.getElementById("ultimo-pago-dt").innerText = fmtFechaHora(paidMs);
@@ -392,55 +186,44 @@
       document.getElementById("row-ultimo-pago").style.display = "none";
     }
 
-    // Se hace visible el bloque de tiempos.
     document.getElementById("parking-time-box").style.display = "block";
   }
 
-  /**
-   * Función principal de inicio.
-   * Determina si se está entrando por:
-   * - Flujo normal: ?ticket=XXXX
-   * - Retorno/confirmación de Yappy: ?hash=...&status=...&orderId=...&domain=...
-   */
   async function init() {
-    // Se capturan parámetros de retorno de Yappy para validación de integridad (IPN).
     const yappyHash = params.get('hash');
     const yappyStatus = params.get('status');
     const yappyOrderId = params.get('orderId');
     const yappyDomain = params.get('domain');
 
-    // Si vienen parámetros IPN, se valida hash por backend y se procede.
+    // ✅ IPN/HASH SOLO COMO RECOVERY (REFRESH): si ya liberó en esta sesión, no vuelve a aplicar
     if (yappyHash && yappyStatus && yappyOrderId && yappyDomain) {
+      if (isApplied()) {
+        // Ya se liberó; solo intenta mostrar estado final consultando getData
+        document.getElementById('loading-view').innerText = "Pago ya procesado. Verificando ticket...";
+        await refrescarMinutosSalidaPorGetData();
+        return;
+      }
+
       document.getElementById('loading-view').innerText = "Validando pago con Yappy...";
       await verificarPagoYappy(yappyHash, yappyStatus, yappyOrderId, yappyDomain);
       return;
     }
 
-    // Si no existe ticket, se corta el flujo mostrando error.
     if (!ticketParam) { showError("Falta el ticket."); return; }
 
     try {
-      // Se consulta al Worker el estado del ticket:
-      // - Retorna XML si el ticket está pendiente.
-      // - Retorna JSON si ya está validado (ALREADY_VALIDATED).
       const res = await fetch(WORKER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "getData", ticket: ticketParam })
       });
 
-      // Se lee como texto para decidir si es XML o JSON.
       const text = await res.text();
-
-      // Se oculta la vista de carga.
       document.getElementById('loading-view').style.display = 'none';
 
-      // Caso 1: JSON -> ticket ya validado.
       if (text.trim().startsWith('{')) {
         const data = JSON.parse(text);
-
         if (data.status === "ALREADY_VALIDATED") {
-          // Se pintan tiempos si el worker los devuelve (entryEpochMs/nowEpochMs/paidEpochMs).
           if (data.entryEpochMs && data.nowEpochMs) {
             pintarTiempoEnParqueo(
               Number(data.entryEpochMs),
@@ -448,58 +231,41 @@
               Number(data.paidEpochMs || 0)
             );
           }
-
-          // Se muestra vista final indicando que ya estaba validado.
           showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
           return;
         }
       }
 
-      // Caso 2: XML -> ticket pendiente o requiere pago.
       if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
-        // Se toma “ahora” en el frontend para evitar dependencia de reloj del servidor.
         const nowEpochMs = Date.now();
 
-        // Se extraen valores del XML de Janus.
         montoGlobal = xmlTag(text, "amountToPay");
         ticketRealGlobal = xmlTag(text, "ticketNumber") || ticketParam;
         tariffIdGlobal = xmlTag(text, "tariffProfileId") || 10;
 
-        // Se extrae la hora de entrada y la hora de último pago (si existe).
         const entryEpochMs = normalizeEpochMs(xmlTag(text, "entryTimestamp"));
         const paidEpochMs = normalizeEpochMs(xmlTag(text, "paidTime"));
 
-        // Se pintan valores antes de mostrar payment-view para evitar saltos visuales.
         document.getElementById('monto-display').innerText = `$${montoGlobal}`;
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
         pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
 
-        // Se muestra la vista de pago y se configura Yappy.
         document.getElementById('payment-view').style.display = 'block';
         setupYappy();
       } else {
-        // Si no hay OK, el ticket es inválido/no reconocido.
         showError("Ticket no reconocido.");
       }
     } catch (e) {
-      // Error de red, CORS o caída del Worker.
       showError("Error de conexión.");
     }
   }
 
-  /**
-   * Valida por backend la integridad del retorno de Yappy.
-   * Si el hash es válido y status es 'E', se procede a aplicar el pago en Janus.
-   */
   async function verificarPagoYappy(hash, status, orderId, domain) {
-    // Si el worker inyectó realTicket en ipnUrl, se rescata de la URL.
     const realTicketFromUrl = params.get('realTicket');
 
     try {
-      // Se pide al Worker ejecutar verifyYappyHash para comparar hash local vs hash recibido.
       const result = await postWorker({ action: "verifyYappyHash", hash, status, orderId, domain });
 
-      // Si el backend falla, se muestra error con HTTP.
       if (!result.ok) {
         showError(`Error validando con servidor (HTTP ${result.status}).`);
         return;
@@ -507,12 +273,18 @@
 
       const data = result.json;
 
-      // Si el hash coincide y el estado es Ejecutado, se procede a liberar en Janus.
       if (data.success && data.status === 'E') {
+        // Si venimos por IPN, intentamos rescatar el ticket real
         ticketRealGlobal = realTicketFromUrl || orderId;
+
+        // ✅ Si ya liberó antes (raro, pero por seguridad), no duplica apply
+        if (isApplied()) {
+          await refrescarMinutosSalidaPorGetData();
+          return;
+        }
+
         await liberarJanus();
       } else {
-        // Se traduce el status a un texto amigable.
         const map = {
           "R": "Pago rechazado (no confirmado a tiempo).",
           "C": "Pago cancelado por el cliente.",
@@ -526,15 +298,9 @@
     }
   }
 
-  /**
-   * Configura el comportamiento del botón Yappy:
-   * - Si monto es 0: muestra “VALIDAR GRATIS” (sin Yappy).
-   * - Si monto > 0: renderiza el Web Component y lo habilita cuando NIT y correo sean válidos.
-   */
   function setupYappy() {
     const container = document.getElementById('yappy-container');
 
-    // Caso: ticket sin cobro (Q0.00 / $0.00). Se valida directo contra Janus.
     if (parseFloat(montoGlobal) <= 0) {
       container.innerHTML = `
         <button onclick="liberarJanus()"
@@ -546,24 +312,19 @@
       return;
     }
 
-    // Caso: hay cobro. Se inserta el componente Yappy inicialmente deshabilitado.
     container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
     const btn = document.querySelector('btn-yappy');
 
-    // Evento click del componente: antes de pagar se debe crear la orden en el backend.
     btn.addEventListener("eventClick", async () => {
       try {
-        // Se activa “loading” nativo del componente.
         btn.isButtonLoading = true;
 
-        // Se solicita al Worker crear la orden en Yappy con ticket y monto.
         const result = await postWorker({
           action: "createYappyV2Order",
           ticket: ticketRealGlobal,
           amount: montoGlobal
         });
 
-        // Si falla, se reporta error y se baja el loading.
         if (!result.ok) {
           const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
           showError(err);
@@ -573,21 +334,18 @@
 
         const data = result.json;
 
-        // Si el backend devolvió un error controlado, se muestra.
         if (data.error) {
           showError(data.error);
           btn.isButtonLoading = false;
           return;
         }
 
-        // Se invoca eventPayment del componente con los tokens requeridos por Yappy.
         btn.eventPayment({
           transactionId: data.transactionId,
           token: data.token,
           documentName: data.documentName
         });
 
-        // Se desactiva el loading porque el modal del botón tomará el control.
         btn.isButtonLoading = false;
       } catch (e) {
         btn.isButtonLoading = false;
@@ -595,46 +353,28 @@
       }
     });
 
-    // Evento “success”: no se confía ciegamente, se valida por backend si hay hash en el detail.
+    // ✅ FLUJO NORMAL: eventSuccess -> liberarJanus directamente (sin esperar IPN)
     btn.addEventListener("eventSuccess", async (event) => {
-      // Se evita ejecutar dos veces el mismo flujo.
       if (liberando) return;
 
-      // Se toma el detalle del evento del componente.
-      const d = event?.detail || {};
+      // (Opcional) Log para que veas EXACTAMENTE qué viaja aquí
+      // console.log("eventSuccess.detail =", event.detail);
 
-      // Si vienen hash/status/orderId/domain, se valida inmediatamente por backend.
-      if (d.hash && d.status && d.orderId && d.domain) {
-        document.getElementById('loading-view').style.display = 'block';
-        document.getElementById('loading-view').innerText = "Confirmando pago...";
-        document.getElementById('payment-view').style.display = 'none';
-        await verificarPagoYappy(d.hash, d.status, d.orderId, d.domain);
-        return;
-      }
-
-      // Si no viene detalle, se muestra texto de espera (a veces el flujo depende del redirect IPN).
       document.getElementById('loading-view').style.display = 'block';
-      document.getElementById('loading-view').innerText = "Pago exitoso. Confirmando...";
+      document.getElementById('loading-view').innerText = "Pago exitoso. Liberando ticket...";
+      document.getElementById('payment-view').style.display = 'none';
+
+      await liberarJanus();
     });
 
-    // Evento “error”: se muestra el código y descripción si vienen.
     btn.addEventListener("eventError", (event) => {
       const d = event?.detail || {};
-      const msg = d?.code
-        ? `Yappy error ${d.code}: ${d?.description || "Transacción fallida."}`
-        : "Transacción fallida.";
+      const msg = d?.code ? `Yappy error ${d.code}: ${d?.description || "Transacción fallida."}` : "Transacción fallida.";
       showError(msg);
       btn.isButtonLoading = false;
     });
   }
 
-  /**
-   * Valida el formulario para habilitar el botón Yappy.
-   * - NIT: números o CF
-   * - Email: patrón básico usuario@dominio.com
-   * Si es válido: quita overlay y sube opacidad del botón.
-   * Si no: pone overlay y baja opacidad del botón.
-   */
   function validarForm() {
     const nit = document.getElementById('nit').value.trim();
     const email = document.getElementById('email').value.trim();
@@ -652,25 +392,17 @@
     }
   }
 
-  /**
-   * Aplica el pago (o validación gratuita) en Janus mediante el Worker.
-   * Luego vuelve a consultar getData para obtener freeExit restante y mostrar la vista final.
-   */
   async function liberarJanus() {
-    // Se evita doble ejecución (por doble click o eventos repetidos).
     if (liberando) return;
     liberando = true;
 
-    // Se muestra estado “Sincronizando...” mientras se aplica pago.
     document.getElementById('loading-view').style.display = 'block';
     document.getElementById('loading-view').innerText = "Sincronizando...";
     document.getElementById('payment-view').style.display = 'none';
 
-    // Se toma NIT del formulario; si no existe el input por algún motivo, se usa CF.
     const nitValue = document.getElementById('nit')?.value || "CF";
 
     try {
-      // Se manda applyPayment al Worker para que haga apply en Janus.
       const result = await postWorker({
         action: "applyPayment",
         ticket: ticketRealGlobal,
@@ -679,7 +411,6 @@
         nit: nitValue
       });
 
-      // Si el Worker responde con error, se revierte el flag y se muestra mensaje.
       if (!result.ok) {
         showError(`Error aplicando pago (HTTP ${result.status}).`);
         liberando = false;
@@ -688,45 +419,48 @@
 
       const data = result.json;
 
-      // Se valida si Janus respondió OK dentro de su XML.
       if (data.janusResponse && data.janusResponse.includes("<status>OK</status>")) {
-        // Se hace una segunda consulta a getData para obtener los minutos de salida.
-        const verify = await fetch(WORKER_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal })
-        });
+        // ✅ Marca como aplicado para que IPN/refresh no duplique
+        markApplied();
 
-        let tiempoFinal = "15";
-        const updateText = await verify.text();
-
-        // Si getData ahora devuelve JSON ALREADY_VALIDATED, se extrae remaining (freeExit).
-        if (updateText.trim().startsWith('{')) {
-          const updateData = JSON.parse(updateText);
-          if (updateData.status === "ALREADY_VALIDATED") tiempoFinal = updateData.remaining;
-        }
-
-        // Se muestra vista final de éxito.
-        showSuccess(ticketRealGlobal, tiempoFinal, "PAGO EXITOSO");
+        await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
       } else {
-        // Si Janus no confirma OK, se informa y se permite reintentar.
         showError("Janus no confirmó el OK de pago.");
         liberando = false;
       }
     } catch (e) {
-      // Error de red o excepción: se informa y se permite reintentar.
       showError("Error al sincronizar con el servidor.");
       liberando = false;
     }
   }
 
-  /**
-   * Muestra la vista final de éxito:
-   * - Cambia el título del header
-   * - Oculta loading
-   * - Muestra success view
-   * - Pinta ticket y minutos de salida
-   */
+  // ✅ helper: consulta getData y muestra minutos de salida
+  async function refrescarMinutosSalidaPorGetData(titleIfOk = "PROCESADO") {
+    try {
+      const verify = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal || ticketParam })
+      });
+
+      let tiempoFinal = "15";
+      const updateText = await verify.text();
+
+      if (updateText.trim().startsWith('{')) {
+        const updateData = JSON.parse(updateText);
+        if (updateData.status === "ALREADY_VALIDATED") {
+          tiempoFinal = updateData.remaining;
+          // si querés, también podrías pintar tiempos aquí si vienen
+        }
+      }
+
+      showSuccess(ticketRealGlobal || ticketParam || "—", tiempoFinal, titleIfOk);
+    } catch (e) {
+      // Si falla getData, al menos muestra éxito “genérico” sin minutos
+      showSuccess(ticketRealGlobal || ticketParam || "—", "--", titleIfOk);
+    }
+  }
+
   function showSuccess(id, mins, title) {
     document.getElementById('header-title').innerText = title;
     document.getElementById('loading-view').style.display = 'none';
@@ -735,19 +469,12 @@
     document.getElementById('mins-qty').innerText = mins;
   }
 
-  /**
-   * Muestra error:
-   * - Oculta loading
-   * - Regresa a la vista de pago para permitir corregir o reintentar
-   * - Inserta el mensaje dentro del contenedor de error
-   */
   function showError(msg) {
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'block';
     document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
   }
 
-  // Se registra init como función a ejecutar cuando cargue la página.
   window.onload = init;
 </script>
 </body>
