@@ -11,8 +11,8 @@
             --tas-dark: #231f20;
             --tas-bg: #f4f4f4;
             --white: #ffffff;
-            --yappi-blue: #004581; /* Color del texto de Yappi */
-            --j4pay-green: #80B256; /* El verde de logo J4Pay */
+            --yappi-blue: #004581;
+            --j4pay-green: #80B256;
         }
 
         body {
@@ -139,40 +139,25 @@
     const rawData = params.get('ticket') || 'SIN-DATA';
     
     let montoFinal = 0;
-    let ticketLargo = rawData; // Por defecto usamos el rawData que recibimos
+    let ticketLargo = rawData;
 
-    // Mostramos el ID en el cuadro gris
     document.getElementById('ticketDisplay').innerText = "TICKET: " + rawData;
 
-    // Redirección para Yappy.html nuestro
     function goYappi() {
-        
-        //const nombreArchivoDestino = "yappy.html"; 
-        
         if (rawData !== 'SIN-DATA') {
-            window.location.href = `https://ingealexeg.github.io/links-parking/debug.html?ticket=${rawData}`;
+            window.location.href = `https://ingealexeg.github.io/links-parking/yappy.html?ticket=${rawData}`;
         } else {
             alert("No se detectó un ticket válido para procesar el pago.");
         }
     }
 
-    // Enlace a J4Pay Showroom hay que cambiar a url segun cliente
     function goJ4() {
         window.location.href = `https://eu-sandbox.j-pass.com/#/user/external-ticket?installationCode=3569036549&identifier=${rawData}`;
     }
 
     function goWompi() {
-        // Enlace simulacion temporal para Wompi prueba que ya hacemos procedimiento get/ticketdata y /apply
-        window.location.href = `https://ingealexeg.github.io/links-parking/yappy.html?ticket=${rawData}`;
+        window.location.href = `https://ingealexeg.github.io/links-parking/debug_wompi.html?ticket=${rawData}`;
     }
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
