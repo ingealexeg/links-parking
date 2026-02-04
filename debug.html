@@ -72,6 +72,8 @@
         <div class="time-row"><span>Entrada:</span> <span id="entrada-dt">--/--/---- --:--:--</span></div>
         <div class="time-row"><span>Consulta:</span> <span id="consulta-dt">--/--/---- --:--:--</span></div>
         <div class="time-row"><span><b>Duración:</b></span> <span id="tiempo-uso"><b>--:--:--</b></span></div>
+        <!-- ✅ NUEVO: último pago si existe -->
+        <div class="time-row" id="row-ultimo-pago" style="display:none;"><span>Último pago:</span> <span id="ultimo-pago-dt">--/--/---- --:--:--</span></div>
       </div>
 
       <div class="form-group">
@@ -178,8 +180,9 @@
 
   /**
    * Se pinta el bloque de tiempo en parqueo usando entryTimestamp del PRIMER getData.
+   * ✅ NUEVO: también pinta "último pago" si viene.
    */
-  function pintarTiempoEnParqueo(entryEpochMs, nowEpochMs) {
+  function pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs) {
     if (!entryEpochMs) return;
 
     entryEpochMsGlobal = entryEpochMs;
@@ -188,6 +191,14 @@
     document.getElementById("entrada-dt").innerText = fmtFechaHora(entryEpochMs);
     document.getElementById("consulta-dt").innerText = fmtFechaHora(nowEpochMs);
     document.getElementById("tiempo-uso").innerText = fmtHHMMSS(diffMs);
+
+    const paidMs = normalizeEpochMs(paidEpochMs);
+    if (paidMs > 0) {
+      document.getElementById("ultimo-pago-dt").innerText = fmtFechaHora(paidMs);
+      document.getElementById("row-ultimo-pago").style.display = "flex";
+    } else {
+      document.getElementById("row-ultimo-pago").style.display = "none";
+    }
 
     document.getElementById("parking-time-box").style.display = "block";
   }
@@ -226,9 +237,9 @@
       if (text.trim().startsWith('{')) {
         const data = JSON.parse(text);
         if (data.status === "ALREADY_VALIDATED") {
-          // Se pintan tiempos si vienen en el JSON (este worker los envía)
+          // ✅ pintar tiempos usando datos del worker (incluye paidEpochMs)
           if (data.entryEpochMs && data.nowEpochMs) {
-            pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs));
+            pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs), Number(data.paidEpochMs || 0));
           }
           showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
           return;
@@ -244,11 +255,12 @@
         tariffIdGlobal = xmlTag(text, "tariffProfileId") || 10;
 
         const entryEpochMs = normalizeEpochMs(xmlTag(text, "entryTimestamp"));
+        const paidEpochMs = normalizeEpochMs(xmlTag(text, "paidTime")); // ✅ NUEVO
 
         // Se pintan datos antes de mostrar la vista para evitar “salto” visual
         document.getElementById('monto-display').innerText = `Q${montoGlobal}`;
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
-        pintarTiempoEnParqueo(entryEpochMs, nowEpochMs);
+        pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
 
         document.getElementById('payment-view').style.display = 'block';
         setupYappy();
