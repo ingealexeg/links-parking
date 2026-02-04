@@ -8,19 +8,33 @@
 
   <style>
     :root { --tas-red: #010409; --tas-green: #28a745; --dark: #4666ff; }
+
     body { font-family: 'Montserrat', sans-serif; background-color: #f8f9fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+
     .payment-card { background: white; width: 90%; max-width: 450px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
     .header { background: var(--dark); padding: 20px; text-align: center; border-bottom: 4px solid var(--tas-red); }
     .content { padding: 30px; }
-    .amount-section { text-align: center; margin-bottom: 25px; }
+
+    .amount-section { text-align: center; margin-bottom: 18px; }
     .amount-label { font-size: 0.9rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
     .amount-value { font-size: 2.5rem; font-weight: 700; color: var(--dark); margin: 5px 0; }
+
     .ticket-info { background: #f1f3f5; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #888; margin-bottom: 12px; word-break: break-all; text-align: center; }
 
-    /* NUEVO: tiempo dentro del parqueo */
-    .time-in-parking { background: #eef6ff; border: 1px solid #cfe6ff; color: #2c4a66; padding: 10px; border-radius: 8px; font-size: 0.8rem; margin-bottom: 18px; text-align: left; display:none; }
-    .time-row { display:flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
-    .time-in-parking b { color: var(--dark); }
+    /* Bloque de tiempo de uso */
+    .time-in-parking {
+      background: #eef6ff;
+      border: 1px solid #cfe6ff;
+      color: #2c4a66;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      margin-bottom: 18px;
+      text-align: left;
+      display: none;
+    }
+    .time-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+    .time-title { font-weight: 700; color: var(--dark); margin-bottom: 6px; }
 
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; color: #444; }
@@ -41,9 +55,11 @@
 <body>
 
 <div class="payment-card">
-  <div class="header" id="card-header"><h2 id="header-title" style="color: white; margin: 0; font-size: 1.2rem;">Detalle de Pago</h2></div>
-  <div class="content" id="main-content">
+  <div class="header" id="card-header">
+    <h2 id="header-title" style="color: white; margin: 0; font-size: 1.2rem;">Detalle de Pago</h2>
+  </div>
 
+  <div class="content" id="main-content">
     <div id="payment-ui">
       <div class="amount-section">
         <div class="amount-label">Total a Pagar</div>
@@ -52,11 +68,12 @@
 
       <div class="ticket-info"><strong>Ticket ID:</strong> <span id="ticket-id">Cargando...</span></div>
 
-      <!-- NUEVO: Bloque de tiempo en parqueo -->
+      <!-- Bloque de tiempo (se pinta con el primer getData) -->
       <div class="time-in-parking" id="parking-time-box">
-        <div class="time-row"><span>Entrada:</span> <span id="entrada-hora">--:--</span></div>
-        <div class="time-row"><span>Consulta:</span> <span id="consulta-hora">--:--</span></div>
-        <div class="time-row"><span><b>Tiempo:</b></span> <span id="tiempo-total"><b>--</b></span></div>
+        <div class="time-title">Tiempo de uso de parqueo</div>
+        <div class="time-row"><span>Entrada:</span> <span id="entrada-hora">--/--/---- --:--:--</span></div>
+        <div class="time-row"><span>Consulta:</span> <span id="consulta-hora">--/--/---- --:--:--</span></div>
+        <div class="time-row"><span><b>Duración:</b></span> <span id="tiempo-total"><b>--:--:--</b></span></div>
       </div>
 
       <div class="form-group">
@@ -83,55 +100,47 @@
 
   let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
 
-  /**
-   * Se formatea una fecha epoch(ms) a hora local legible.
-   */
-  function fmtHora(epochMs) {
-    if (!epochMs) return "--:--";
+  function xmlTag(xml, tag) {
+    const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "i");
+    return xml.match(re)?.[1] ?? "";
+  }
+
+  function normalizeEpochMs(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (String(Math.trunc(n)).length <= 10) return n * 1000;
+    return n;
+  }
+
+  function fmtFechaHora(epochMs) {
+    if (!epochMs) return "--/--/---- --:--:--";
     return new Intl.DateTimeFormat('es-GT', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(new Date(epochMs));
   }
 
-  /**
-   * Se convierte milisegundos a un texto tipo "2h 15m".
-   */
-  function fmtDuracion(ms) {
-    if (!ms || ms < 0) return "--";
+  function fmtHHMMSS(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return "--:--:--";
     const totalSec = Math.floor(ms / 1000);
     const h = Math.floor(totalSec / 3600);
     const m = Math.floor((totalSec % 3600) / 60);
     const s = totalSec % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
+    const pad = (x) => String(x).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
   }
 
-  /**
-   * Se pinta el bloque "Tiempo en parqueo" pidiendo entryTimestamp al Worker.
-   */
-  async function cargarYMostrarTiempo(ticket) {
-    try {
-      const res = await fetch(WORKER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "getTicketTimes", ticket })
-      });
-      const data = await res.json();
-      if (!data?.entryEpochMs) return;
+  function pintarTiempo(entryEpochMs, nowEpochMs) {
+    if (!entryEpochMs) return;
+    const diffMs = nowEpochMs - entryEpochMs;
 
-      document.getElementById("entrada-hora").innerText = fmtHora(data.entryEpochMs);
-      document.getElementById("consulta-hora").innerText = fmtHora(data.nowEpochMs);
-      document.getElementById("tiempo-total").innerText = fmtDuracion(data.diffMs);
-      document.getElementById("parking-time-box").style.display = "block";
-    } catch (_) {
-      // Si falla, no se rompe el flujo principal
-    }
+    document.getElementById("entrada-hora").innerText = fmtFechaHora(entryEpochMs);
+    document.getElementById("consulta-hora").innerText = fmtFechaHora(nowEpochMs);
+    document.getElementById("tiempo-total").innerText = fmtHHMMSS(diffMs);
+
+    document.getElementById("parking-time-box").style.display = "block";
   }
 
-  /**
-   * FUNCIÓN VALIDARFORMULARIO: Validación estricta mediante RegEx.
-   */
   function validarFormulario() {
     if (parseFloat(montoGlobal) <= 0) return true;
     const nit = document.getElementById('nit').value.trim();
@@ -145,9 +154,6 @@
     return true;
   }
 
-  /**
-   * FUNCIÓN INITPAYMENT: Carga inicial de datos.
-   */
   async function initPayment() {
     const montoDiv = document.getElementById('monto-display');
     const yappyContainer = document.getElementById('yappy-container');
@@ -160,30 +166,33 @@
         body: JSON.stringify({ action: "getData", ticket: ticketParam.trim() })
       });
 
-      const contentType = response.headers.get("content-type") || "";
+      const resultText = await response.text();
 
-      // Si el worker devuelve JSON (ticket ya validado)
-      if (contentType.includes("application/json")) {
-        const data = await response.json();
+      // Caso JSON (ALREADY_VALIDATED)
+      if (resultText.trim().startsWith("{")) {
+        const data = JSON.parse(resultText);
         if (data.status === "ALREADY_VALIDATED") {
-          await cargarYMostrarTiempo(data.realTicket || ticketParam);
+          if (data.entryEpochMs && data.nowEpochMs) {
+            pintarTiempo(Number(data.entryEpochMs), Number(data.nowEpochMs));
+          }
           mostrarExito("TICKET YA VALIDADO", data.realTicket, data.remaining);
           return;
         }
       }
 
-      // Si no es JSON, procesa la respuesta XML como texto
-      const resultText = await response.text();
+      // Caso XML
       if (resultText.includes("<status>OK</status>") || resultText.includes("<status>ok</status>")) {
-        montoGlobal = resultText.match(/<amountToPay>(.*?)<\/amountToPay>/)[1];
-        ticketRealGlobal = resultText.match(/<ticketNumber>(.*?)<\/ticketNumber>/)[1];
-        tariffIdGlobal = resultText.match(/<tariffProfileId>(.*?)<\/tariffProfileId>/)?.[1] || 10;
+        const nowEpochMs = Date.now();
+
+        montoGlobal = xmlTag(resultText, "amountToPay");
+        ticketRealGlobal = xmlTag(resultText, "ticketNumber") || ticketParam.trim();
+        tariffIdGlobal = xmlTag(resultText, "tariffProfileId") || 10;
+
+        const entryEpochMs = normalizeEpochMs(xmlTag(resultText, "entryTimestamp"));
+        pintarTiempo(entryEpochMs, nowEpochMs);
 
         montoDiv.innerText = `Q${montoGlobal}`;
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
-
-        // NUEVO: se pinta el tiempo dentro del parqueo
-        await cargarYMostrarTiempo(ticketRealGlobal);
 
         if (parseFloat(montoGlobal) <= 0) {
           document.getElementById('nit').disabled = true;
@@ -202,9 +211,6 @@
     }
   }
 
-  /**
-   * FUNCIÓN PROCESARPAGO: Ejecución del cobro.
-   */
   async function procesarPago() {
     if (!validarFormulario()) return;
     const container = document.getElementById('yappy-container');
@@ -228,6 +234,7 @@
       });
 
       const data = await response.json();
+
       if (data.janusResponse.includes("<status>OK</status>")) {
         if (parseFloat(montoGlobal) > 0) descargarFacturaLocal(data.nitFinal, email, data.uuidFactura);
 
@@ -240,8 +247,12 @@
         });
 
         let tiempoFinal = "15";
-        const updateData = await updateRes.json();
-        if (updateData.status === "ALREADY_VALIDATED") tiempoFinal = updateData.remaining;
+        const updateText = await updateRes.text();
+
+        if (updateText.trim().startsWith("{")) {
+          const updateData = JSON.parse(updateText);
+          if (updateData.status === "ALREADY_VALIDATED") tiempoFinal = updateData.remaining;
+        }
 
         mostrarExito("PAGO EXITOSO", ticketRealGlobal, tiempoFinal);
       } else {
