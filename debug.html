@@ -555,13 +555,13 @@
       // Se evita que el flujo se ejecute dos veces.
       if (liberando) return;
 
-      // Para depurar qué viene desde Yappy, él puede habilitar este log.
+      // Para depurar qué viene desde Yappy, se puede habilitar este log.
       // Nota: en celular es mejor verlo con chrome://inspect o Safari Web Inspector.
       // console.log("eventSuccess.detail =", event.detail);
 
       // Se cambia a vista de “liberando ticket” para dar feedback al usuario.
       document.getElementById('loading-view').style.display = 'block';
-      document.getElementById('loading-view').innerText = "Pago exitoso. Liberando ticket...";
+      document.getElementById('loading-view').innerText = "Pago exitoso. Validando ticket...";
       document.getElementById('payment-view').style.display = 'none';
 
       // Se aplica pago (applyPayment) y se muestra el estado final.
