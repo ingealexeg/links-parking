@@ -203,7 +203,7 @@
         const paidEpochMs = normalizeEpochMs(xmlTag(resultText, "paidTime")); // ✅ NUEVO
         pintarTiempo(entryEpochMs, nowEpochMs, paidEpochMs);
 
-        montoDiv.innerText = `Q${montoGlobal}`;
+        montoDiv.innerText = `$${montoGlobal}`;
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
 
         if (parseFloat(montoGlobal) <= 0) {
