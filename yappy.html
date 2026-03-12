@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAS | Detalle de Pago</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <script type="module" src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
+
+  <style>
+    :root { --tas-blue: #1f95f0; --tas-accent: #e88d43; --tas-green: #28a745; --tas-light-green: #e9f5f0; }
+    body { font-family: 'Montserrat', sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .card { background: white; width: 92%; max-width: 400px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; text-align: center; }
+    .header { background: var(--tas-blue); padding: 20px; color: white; border-bottom: 4px solid var(--tas-accent); }
+    .header h2 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
+    .content { padding: 35px 25px; }
+    .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px; }
+    .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 18px; }
+    .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 12px; }
+    .time-in-parking {
+      background: #eef6ff;
+      border: 1px solid #cfe6ff;
+      color: #2c4a66;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      margin-bottom: 22px;
+      text-align: left;
+      display: none;
+    }
+    .time-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+    .time-title { font-weight: 700; color: #1f95f0; margin-bottom: 6px; }
+    .form-group { text-align: left; margin-bottom: 15px; }
+    label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
+    input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
+
+    .radio-group {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #444;
+      cursor: pointer;
+      margin-bottom: 0;
+    }
+    .radio-option input[type="radio"] {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      accent-color: var(--tas-blue);
+      cursor: pointer;
+    }
+
+    #yappy-wrapper { margin-top: 25px; position: relative; width: 100%; display: center; justify-content: center; }
+    #yappy-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: not-allowed; display: block; }
+    btn-yappy { width: 100% !important; max-width: 300px; display: block; opacity: 0.4; transition: opacity 0.3s ease; }
+    .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
+    .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
+    .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
+    .footer-thanks { color: #aaa; font-size: 0.85rem; }
+    .loading { color: var(--tas-accent); font-weight: 600; padding: 20px; }
+    .error-msg { color: #dc3545; font-weight: 600; margin-top: 15px; font-size: 0.9rem; }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="header">
+      <h2 id="header-title">Detalle de Pago</h2>
+    </div>
+
+    <div class="content" id="main-content">
+      <div id="loading-view" class="loading">Consultando servidor...</div>
+
+      <div id="payment-view" style="display:none;">
+        <div class="total-label">Total a Pagar</div>
+        <div id="monto-display" class="amount">$ --.--</div>
+
+        <div class="ticket-id-box">
+          Ticket ID: <span id="ticket-id">---</span>
+        </div>
+
+        <div class="time-in-parking" id="parking-time-box">
+          <div class="time-title">Tiempo de uso de parqueo</div>
+          <div class="time-row"><span>Entrada:</span> <span id="entrada-dt">--/--/---- --:--:--</span></div>
+          <div class="time-row"><span>Consulta:</span> <span id="consulta-dt">--/--/---- --:--:--</span></div>
+          <div class="time-row"><span><b>Duración:</b></span> <span id="tiempo-uso"><b>--:--:--</b></span></div>
+          <div class="time-row" id="row-ultimo-pago" style="display:none;">
+            <span>Último pago:</span> <span id="ultimo-pago-dt">--/--/---- --:--:--</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Tipo de documento fiscal *</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" name="docType" id="doc-cf" value="CF" onchange="toggleDocType()">
+              <span>C/F (Consumidor Final)</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="docType" id="doc-ruc" value="RUC" onchange="toggleDocType()">
+              <span>RUC</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="ruc-group" style="display:none;">
+          <label>RUC *</label>
+          <input type="text" id="ruc" placeholder="Ingrese su RUC" onkeyup="validarForm()" oninput="normalizarRUCInput()">
+        </div>
+
+        <div class="form-group">
+          <label>Correo Electrónico *</label>
+          <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
+        </div>
+
+        <div id="yappy-wrapper">
+          <div id="yappy-overlay"></div>
+          <div id="yappy-container"></div>
+        </div>
+
+        <div id="error-container"></div>
+      </div>
+
+      <div id="success-view" style="display:none;">
+        <span class="check-icon">✓</span>
+        <span class="ticket-final" id="ticket-final-id">ID: ---</span>
+        <div class="time-box">
+          Tiene <b id="mins-qty">--</b> <b>minutos</b> para salir de las instalaciones.
+        </div>
+        <div class="footer-thanks">¡Gracias por su visita!</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
+  const params = new URLSearchParams(window.location.search);
+  const ticketParam = params.get('ticket');
+
+  let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
+  let liberando = false;
+  let entryEpochMsGlobal = 0;
+
+  function appliedKey() {
+    const orderId = params.get('orderId') || "";
+    const t = ticketRealGlobal || ticketParam || orderId || "unknown";
+    return `tas_applied_${t}`;
+  }
+  function markApplied() { sessionStorage.setItem(appliedKey(), "1"); }
+  function isApplied() { return sessionStorage.getItem(appliedKey()) === "1"; }
+
+  async function postWorker(payload) {
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const text = await res.text();
+    if (text.trim().startsWith("{")) {
+      return { ok: res.ok, status: res.status, json: JSON.parse(text) };
+    }
+    return { ok: res.ok, status: res.status, text };
+  }
+
+  function xmlTag(xml, tag) {
+    const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "i");
+    return xml.match(re)?.[1] ?? "";
+  }
+
+  function normalizeEpochMs(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (String(Math.trunc(n)).length <= 10) return n * 1000;
+    return n;
+  }
+
+  function fmtFechaHora(epochMs) {
+    if (!epochMs) return "--/--/---- --:--:--";
+    return new Intl.DateTimeFormat('es-GT', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).format(new Date(epochMs));
+  }
+
+  function fmtHHMMSS(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return "--:--:--";
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const pad = (x) => String(x).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+
+  function pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs) {
+    if (!entryEpochMs) return;
+    entryEpochMsGlobal = entryEpochMs;
+    const diffMs = nowEpochMs - entryEpochMs;
+    document.getElementById("entrada-dt").innerText = fmtFechaHora(entryEpochMs);
+    document.getElementById("consulta-dt").innerText = fmtFechaHora(nowEpochMs);
+    document.getElementById("tiempo-uso").innerText = fmtHHMMSS(diffMs);
+    const paidMs = normalizeEpochMs(paidEpochMs);
+    if (paidMs > 0) {
+      document.getElementById("ultimo-pago-dt").innerText = fmtFechaHora(paidMs);
+      document.getElementById("row-ultimo-pago").style.display = "flex";
+    } else {
+      document.getElementById("row-ultimo-pago").style.display = "none";
+    }
+    document.getElementById("parking-time-box").style.display = "block";
+  }
+
+  function toggleDocType() {
+    const isRuc = document.getElementById('doc-ruc').checked;
+    const rucGroup = document.getElementById('ruc-group');
+    const rucInput = document.getElementById('ruc');
+
+    rucGroup.style.display = isRuc ? 'block' : 'none';
+
+    if (!isRuc) {
+      rucInput.value = '';
+    }
+
+    validarForm();
+  }
+
+  function normalizarRUCInput() {
+    const input = document.getElementById('ruc');
+    if (!input) return;
+    input.value = input.value.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+    validarForm();
+  }
+
+  function validarRucPanama(ruc) {
+    const value = (ruc || "").trim().toUpperCase();
+    if (!value) return false;
+
+    // Flexible para Panamá:
+    // - personas naturales: puede coincidir con cédula
+    // - jurídicas / NT / extranjeras: combinaciones con letras, números y guiones
+    // Requiere al menos un guion o longitud razonable para evitar falsos positivos.
+    const patterns = [
+      /^[A-Z0-9]+(?:-[A-Z0-9]+){1,4}$/,   // formatos con 1 a 4 guiones
+      /^[A-Z]\d{1,4}\d*$/,                // variantes compactas tipo letra + números
+      /^\d{6,15}$/                        // numérico largo si manejan captura sin guiones
+    ];
+
+    return patterns.some((re) => re.test(value));
+  }
+
+  async function init() {
+    const yappyHash = params.get('hash');
+    const yappyStatus = params.get('status');
+    const yappyOrderId = params.get('orderId');
+    const yappyDomain = params.get('domain');
+
+    if (yappyHash && yappyStatus && yappyOrderId && yappyDomain) {
+      if (isApplied()) {
+        document.getElementById('loading-view').innerText = "Pago ya procesado. Verificando ticket...";
+        await refrescarMinutosSalidaPorGetData();
+        return;
+      }
+      document.getElementById('loading-view').innerText = "Validando pago con Yappy...";
+      await verificarPagoYappy(yappyHash, yappyStatus, yappyOrderId, yappyDomain);
+      return;
+    }
+
+    if (!ticketParam) { showError("Falta el ticket."); return; }
+
+    try {
+      const res = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "getData", ticket: ticketParam })
+      });
+
+      const text = await res.text();
+      document.getElementById('loading-view').style.display = 'none';
+
+      if (text.trim().startsWith('{')) {
+        const data = JSON.parse(text);
+        if (data.status === "ALREADY_VALIDATED") {
+          if (data.entryEpochMs && data.nowEpochMs) {
+            pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs), Number(data.paidEpochMs || 0));
+          }
+          showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
+          return;
+        }
+      }
+
+      if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
+        const nowEpochMs = Date.now();
+        montoGlobal = xmlTag(text, "amountToPay");
+        ticketRealGlobal = xmlTag(text, "ticketNumber") || ticketParam;
+        tariffIdGlobal = xmlTag(text, "tariffProfileId") || 10;
+        const entryEpochMs = normalizeEpochMs(xmlTag(text, "entryTimestamp"));
+        const paidEpochMs  = normalizeEpochMs(xmlTag(text, "paidTime"));
+        document.getElementById('monto-display').innerText = `$${montoGlobal}`;
+        document.getElementById('ticket-id').innerText = ticketRealGlobal;
+        pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
+        document.getElementById('payment-view').style.display = 'block';
+        setupYappy();
+      } else {
+        showError("Ticket no reconocido.");
+      }
+    } catch (e) {
+      showError("Error de conexión.");
+    }
+  }
+
+  async function verificarPagoYappy(hash, status, orderId, domain) {
+    const realTicketFromUrl = params.get('realTicket');
+    try {
+      const result = await postWorker({ action: "verifyYappyHash", hash, status, orderId, domain });
+      if (!result.ok) {
+        showError(`Error validando con servidor (HTTP ${result.status}).`);
+        return;
+      }
+      const data = result.json;
+      if (data.success && data.status === 'E') {
+        ticketRealGlobal = realTicketFromUrl || orderId;
+        if (isApplied()) {
+          await refrescarMinutosSalidaPorGetData();
+          return;
+        }
+        await liberarJanus();
+      } else {
+        const map = {
+          "R": "Pago rechazado (no confirmado a tiempo).",
+          "C": "Pago cancelado por el cliente.",
+          "X": "Pago expirado (no iniciado a tiempo).",
+          "E": "Pago ejecutado pero no validado localmente."
+        };
+        showError(map[status] || "La validación de pago falló o fue cancelada.");
+      }
+    } catch (e) {
+      showError("Error al validar con el servidor.");
+    }
+  }
+
+  function setupYappy() {
+    const container = document.getElementById('yappy-container');
+
+    if (parseFloat(montoGlobal) <= 0) {
+      container.innerHTML = `
+        <button onclick="liberarJanus()"
+          style="width:100%; max-width:280px; padding:16px; border-radius:12px;
+                 background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">
+          VALIDAR GRATIS
+        </button>`;
+      document.getElementById('yappy-overlay').style.display = 'none';
+      return;
+    }
+
+    container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
+    const btn = document.querySelector('btn-yappy');
+
+    btn.addEventListener("eventClick", async () => {
+      try {
+        btn.isButtonLoading = true;
+        const result = await postWorker({
+          action: "createYappyV2Order",
+          ticket: ticketRealGlobal,
+          amount: montoGlobal
+        });
+        if (!result.ok) {
+          const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
+          showError(err);
+          btn.isButtonLoading = false;
+          return;
+        }
+        const data = result.json;
+        if (data.error) {
+          showError(data.error);
+          btn.isButtonLoading = false;
+          return;
+        }
+        btn.eventPayment({
+          transactionId: data.transactionId,
+          token: data.token,
+          documentName: data.documentName
+        });
+        btn.isButtonLoading = false;
+      } catch (e) {
+        btn.isButtonLoading = false;
+        showError("Error creando orden con Yappy.");
+      }
+    });
+
+    btn.addEventListener("eventSuccess", async (event) => {
+      if (liberando) return;
+      document.getElementById('loading-view').style.display = 'block';
+      document.getElementById('loading-view').innerText = "Pago exitoso. Validando ticket...";
+      document.getElementById('payment-view').style.display = 'none';
+      await liberarJanus();
+    });
+
+    btn.addEventListener("eventError", (event) => {
+      const d = event?.detail || {};
+      const msg = d?.code ? `Yappy error ${d.code}: ${d?.description || "Transacción fallida."}` : "Transacción fallida.";
+      showError(msg);
+      btn.isButtonLoading = false;
+    });
+  }
+
+  function validarForm() {
+    const docCF = document.getElementById('doc-cf').checked;
+    const docRUC = document.getElementById('doc-ruc').checked;
+    const ruc = document.getElementById('ruc').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const btn = document.querySelector('btn-yappy');
+    const overlay = document.getElementById('yappy-overlay');
+
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    let esValido = false;
+
+    if (docCF) {
+      esValido = emailValido;
+    } else if (docRUC) {
+      esValido = emailValido && validarRucPanama(ruc);
+    }
+
+    if (btn) {
+      btn.setAttribute('is-disabled', !esValido);
+      btn.style.opacity = esValido ? "1" : "0.4";
+      overlay.style.display = esValido ? "none" : "block";
+    }
+  }
+
+  async function liberarJanus() {
+    if (liberando) return;
+    liberando = true;
+
+    document.getElementById('loading-view').style.display = 'block';
+    document.getElementById('loading-view').innerText = "Sincronizando...";
+    document.getElementById('payment-view').style.display = 'none';
+
+    const docCF = document.getElementById('doc-cf')?.checked;
+    const rucValue = document.getElementById('ruc')?.value?.trim() || "";
+    const nitValue = docCF ? "CF" : rucValue;
+
+    try {
+      const result = await postWorker({
+        action: "applyPayment",
+        ticket: ticketRealGlobal,
+        amount: montoGlobal,
+        tariffId: tariffIdGlobal,
+        nit: nitValue
+      });
+
+      if (!result.ok) {
+        showError(`Error aplicando pago (HTTP ${result.status}).`);
+        liberando = false;
+        return;
+      }
+
+      const data = result.json;
+
+      if (data.janusResponse && data.janusResponse.includes("<status>OK</status>")) {
+        markApplied();
+        await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
+      } else {
+        showError("Janus no confirmó el OK de pago.");
+        liberando = false;
+      }
+    } catch (e) {
+      showError("Error al sincronizar con el servidor.");
+      liberando = false;
+    }
+  }
+
+  async function refrescarMinutosSalidaPorGetData(titleIfOk = "PROCESADO") {
+    try {
+      const verify = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal || ticketParam })
+      });
+
+      let tiempoFinal = "15";
+      const updateText = await verify.text();
+
+      if (updateText.trim().startsWith('{')) {
+        const updateData = JSON.parse(updateText);
+        if (updateData.status === "ALREADY_VALIDATED") {
+          tiempoFinal = updateData.remaining;
+        }
+      }
+
+      showSuccess(ticketRealGlobal || ticketParam || "—", tiempoFinal, titleIfOk);
+    } catch (e) {
+      showSuccess(ticketRealGlobal || ticketParam || "—", "--", titleIfOk);
+    }
+  }
+
+  function showSuccess(id, mins, title) {
+    document.getElementById('header-title').innerText = title;
+    document.getElementById('loading-view').style.display = 'none';
+    document.getElementById('success-view').style.display = 'block';
+    document.getElementById('ticket-final-id').innerText = `ID: ${id}`;
+    document.getElementById('mins-qty').innerText = mins;
+  }
+
+  function showError(msg) {
+    document.getElementById('loading-view').style.display = 'none';
+    document.getElementById('payment-view').style.display = 'block';
+    document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
+  }
+
+  window.onload = init;
+</script>
+</body>
+</html>
