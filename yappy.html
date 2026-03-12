@@ -32,72 +32,36 @@
     .time-title { font-weight: 700; color: #1f95f0; margin-bottom: 6px; }
     .form-group { text-align: left; margin-bottom: 15px; }
     label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
-    input[type="text"], input[type="email"] {
-      width: 100%;
-      padding: 14px;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      box-sizing: border-box;
-      font-size: 1rem;
-      font-family: inherit;
-    }
+    input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
 
     .radio-group {
       display: flex;
-      gap: 16px;
+      gap: 18px;
       align-items: center;
       flex-wrap: wrap;
-      margin-top: 8px;
+      margin-top: 6px;
     }
 
     .radio-option {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 0.95rem;
-      font-weight: 500;
+      font-size: 1rem;
+      font-weight: 400;
       color: #444;
       cursor: pointer;
       margin-bottom: 0;
     }
 
-    .radio-option input[type="radio"] {
+    .radio-option input {
       width: auto;
-      margin: 0;
       padding: 0;
-      cursor: pointer;
+      margin: 0;
     }
 
-    #yappy-wrapper {
-      margin-top: 25px;
-      position: relative;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 56px;
-    }
-
-    #yappy-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 10;
-      cursor: not-allowed;
-      display: block;
-      background: transparent;
-    }
-
-    btn-yappy {
-      width: 100% !important;
-      max-width: 300px;
-      display: block;
-      opacity: 0.4;
-      transition: opacity 0.3s ease;
-    }
-
+    #yappy-wrapper { margin-top: 25px; position: relative; width: 100%; display: center; justify-content: center; }
+    #yappy-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: not-allowed; display: block; }
+    btn-yappy { width: 100% !important; max-width: 300px; display: block; opacity: 0.4; transition: opacity 0.3s ease; }
     .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
     .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
     .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
@@ -138,11 +102,11 @@
           <label>Tipo de documento fiscal *</label>
           <div class="radio-group">
             <label class="radio-option">
-              <input type="radio" name="docType" id="doc-cf" value="CF" onchange="toggleDocType()">
+              <input type="radio" name="tipo-doc" id="tipo-cf" value="CF" onchange="validarForm()">
               <span>C/F (Consumidor Final)</span>
             </label>
             <label class="radio-option">
-              <input type="radio" name="docType" id="doc-ruc" value="RUC" onchange="toggleDocType()">
+              <input type="radio" name="tipo-doc" id="tipo-ruc" value="RUC" onchange="validarForm()">
               <span>RUC</span>
             </label>
           </div>
@@ -150,17 +114,17 @@
 
         <div class="form-group" id="ruc-group" style="display:none;">
           <label>RUC *</label>
-          <input type="text" id="ruc" placeholder="Ingrese su RUC" oninput="normalizarRUCInput(); validarForm();">
+          <input type="text" id="ruc" placeholder="Ingrese su RUC" onkeyup="validarForm()">
         </div>
 
         <div class="form-group">
           <label>Correo Electrónico *</label>
-          <input type="email" id="email" placeholder="usuario@dominio.com" oninput="validarForm()">
+          <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
         </div>
 
         <div id="yappy-wrapper">
           <div id="yappy-overlay"></div>
-          <btn-yappy id="yappy-btn" theme="sky" rounded="true" is-disabled="true"></btn-yappy>
+          <div id="yappy-container"></div>
         </div>
 
         <div id="error-container"></div>
@@ -185,7 +149,6 @@
   let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
   let liberando = false;
   let entryEpochMsGlobal = 0;
-  let yappyListenersReady = false;
 
   function appliedKey() {
     const orderId = params.get('orderId') || "";
@@ -255,31 +218,8 @@
     document.getElementById("parking-time-box").style.display = "block";
   }
 
-  function toggleDocType() {
-    const isRuc = document.getElementById('doc-ruc').checked;
-    const rucGroup = document.getElementById('ruc-group');
-    const rucInput = document.getElementById('ruc');
-
-    rucGroup.style.display = isRuc ? 'block' : 'none';
-
-    if (!isRuc) {
-      rucInput.value = '';
-    }
-
-    validarForm();
-  }
-
-  function normalizarRUCInput() {
-    const input = document.getElementById('ruc');
-    if (!input) return;
-    input.value = input.value.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
-  }
-
-  function validarRucPanama(ruc) {
-    const value = (ruc || "").trim().toUpperCase();
-    if (!value) return false;
-
-    return /^[A-Z0-9]+(?:-[A-Z0-9]+){0,4}$/.test(value) && value.length >= 6;
+  function validarRUC(ruc) {
+    return /^[A-Za-z0-9-]{6,20}$/.test(ruc);
   }
 
   async function init() {
@@ -334,7 +274,6 @@
         pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
         document.getElementById('payment-view').style.display = 'block';
         setupYappy();
-        validarForm();
       } else {
         showError("Ticket no reconocido.");
       }
@@ -374,20 +313,21 @@
   }
 
   function setupYappy() {
-    const btn = document.getElementById('yappy-btn');
-    const overlay = document.getElementById('yappy-overlay');
-
-    if (!btn) return;
+    const container = document.getElementById('yappy-container');
 
     if (parseFloat(montoGlobal) <= 0) {
-      overlay.style.display = 'none';
-      btn.style.opacity = "1";
-      btn.style.pointerEvents = "none";
+      container.innerHTML = `
+        <button onclick="liberarJanus()"
+          style="width:100%; max-width:280px; padding:16px; border-radius:12px;
+                 background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">
+          VALIDAR GRATIS
+        </button>`;
+      document.getElementById('yappy-overlay').style.display = 'none';
       return;
     }
 
-    if (yappyListenersReady) return;
-    yappyListenersReady = true;
+    container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
+    const btn = document.querySelector('btn-yappy');
 
     btn.addEventListener("eventClick", async () => {
       try {
@@ -397,27 +337,23 @@
           ticket: ticketRealGlobal,
           amount: montoGlobal
         });
-
         if (!result.ok) {
           const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
           showError(err);
           btn.isButtonLoading = false;
           return;
         }
-
         const data = result.json;
         if (data.error) {
           showError(data.error);
           btn.isButtonLoading = false;
           return;
         }
-
         btn.eventPayment({
           transactionId: data.transactionId,
           token: data.token,
           documentName: data.documentName
         });
-
         btn.isButtonLoading = false;
       } catch (e) {
         btn.isButtonLoading = false;
@@ -425,7 +361,7 @@
       }
     });
 
-    btn.addEventListener("eventSuccess", async () => {
+    btn.addEventListener("eventSuccess", async (event) => {
       if (liberando) return;
       document.getElementById('loading-view').style.display = 'block';
       document.getElementById('loading-view').innerText = "Pago exitoso. Validando ticket...";
@@ -442,33 +378,27 @@
   }
 
   function validarForm() {
-    const docCF = document.getElementById('doc-cf').checked;
-    const docRUC = document.getElementById('doc-ruc').checked;
-    const ruc = document.getElementById('ruc').value.trim();
+    const tipoCF = document.getElementById('tipo-cf').checked;
+    const tipoRUC = document.getElementById('tipo-ruc').checked;
+    const rucGroup = document.getElementById('ruc-group');
+    const ruc = document.getElementById('ruc') ? document.getElementById('ruc').value.trim() : "";
     const email = document.getElementById('email').value.trim();
-    const btn = document.getElementById('yappy-btn');
+    const btn = document.querySelector('btn-yappy');
     const overlay = document.getElementById('yappy-overlay');
 
-    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    rucGroup.style.display = tipoRUC ? "block" : "none";
 
-    let esValido = false;
-
-    if (docCF) {
-      esValido = emailValido;
-    } else if (docRUC) {
-      esValido = emailValido && validarRucPanama(ruc);
-    }
+    const esValido =
+      (
+        (tipoCF) ||
+        (tipoRUC && validarRUC(ruc))
+      ) &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
     if (btn) {
-      if (esValido) {
-        btn.removeAttribute('is-disabled');
-        btn.style.opacity = "1";
-        overlay.style.display = "none";
-      } else {
-        btn.setAttribute('is-disabled', 'true');
-        btn.style.opacity = "0.4";
-        overlay.style.display = "block";
-      }
+      btn.setAttribute('is-disabled', !esValido);
+      btn.style.opacity = esValido ? "1" : "0.4";
+      overlay.style.display = esValido ? "none" : "block";
     }
   }
 
@@ -480,9 +410,10 @@
     document.getElementById('loading-view').innerText = "Sincronizando...";
     document.getElementById('payment-view').style.display = 'none';
 
-    const docCF = document.getElementById('doc-cf')?.checked;
-    const rucValue = document.getElementById('ruc')?.value?.trim() || "";
-    const nitValue = docCF ? "CF" : rucValue;
+    let nitValue = "CF";
+    if (document.getElementById('tipo-ruc').checked) {
+      nitValue = document.getElementById('ruc')?.value.trim() || "";
+    }
 
     try {
       const result = await postWorker({
