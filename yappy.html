@@ -32,7 +32,15 @@
     .time-title { font-weight: 700; color: #1f95f0; margin-bottom: 6px; }
     .form-group { text-align: left; margin-bottom: 15px; }
     label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
-    input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
+    input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      box-sizing: border-box;
+      font-size: 1rem;
+      font-family: inherit;
+    }
 
     .radio-group {
       display: flex;
@@ -41,6 +49,7 @@
       flex-wrap: wrap;
       margin-top: 8px;
     }
+
     .radio-option {
       display: flex;
       align-items: center;
@@ -51,17 +60,44 @@
       cursor: pointer;
       margin-bottom: 0;
     }
+
     .radio-option input[type="radio"] {
       width: auto;
       margin: 0;
       padding: 0;
-      accent-color: var(--tas-blue);
       cursor: pointer;
     }
 
-    #yappy-wrapper { margin-top: 25px; position: relative; width: 100%; display: center; justify-content: center; }
-    #yappy-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: not-allowed; display: block; }
-    btn-yappy { width: 100% !important; max-width: 300px; display: block; opacity: 0.4; transition: opacity 0.3s ease; }
+    #yappy-wrapper {
+      margin-top: 25px;
+      position: relative;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 56px;
+    }
+
+    #yappy-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      cursor: not-allowed;
+      display: block;
+      background: transparent;
+    }
+
+    btn-yappy {
+      width: 100% !important;
+      max-width: 300px;
+      display: block;
+      opacity: 0.4;
+      transition: opacity 0.3s ease;
+    }
+
     .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
     .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
     .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
@@ -114,17 +150,17 @@
 
         <div class="form-group" id="ruc-group" style="display:none;">
           <label>RUC *</label>
-          <input type="text" id="ruc" placeholder="Ingrese su RUC" onkeyup="validarForm()" oninput="normalizarRUCInput()">
+          <input type="text" id="ruc" placeholder="Ingrese su RUC" oninput="normalizarRUCInput(); validarForm();">
         </div>
 
         <div class="form-group">
           <label>Correo Electrónico *</label>
-          <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
+          <input type="email" id="email" placeholder="usuario@dominio.com" oninput="validarForm()">
         </div>
 
         <div id="yappy-wrapper">
           <div id="yappy-overlay"></div>
-          <div id="yappy-container"></div>
+          <btn-yappy id="yappy-btn" theme="sky" rounded="true" is-disabled="true"></btn-yappy>
         </div>
 
         <div id="error-container"></div>
@@ -149,6 +185,7 @@
   let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
   let liberando = false;
   let entryEpochMsGlobal = 0;
+  let yappyListenersReady = false;
 
   function appliedKey() {
     const orderId = params.get('orderId') || "";
@@ -236,24 +273,13 @@
     const input = document.getElementById('ruc');
     if (!input) return;
     input.value = input.value.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
-    validarForm();
   }
 
   function validarRucPanama(ruc) {
     const value = (ruc || "").trim().toUpperCase();
     if (!value) return false;
 
-    // Flexible para Panamá:
-    // - personas naturales: puede coincidir con cédula
-    // - jurídicas / NT / extranjeras: combinaciones con letras, números y guiones
-    // Requiere al menos un guion o longitud razonable para evitar falsos positivos.
-    const patterns = [
-      /^[A-Z0-9]+(?:-[A-Z0-9]+){1,4}$/,   // formatos con 1 a 4 guiones
-      /^[A-Z]\d{1,4}\d*$/,                // variantes compactas tipo letra + números
-      /^\d{6,15}$/                        // numérico largo si manejan captura sin guiones
-    ];
-
-    return patterns.some((re) => re.test(value));
+    return /^[A-Z0-9]+(?:-[A-Z0-9]+){0,4}$/.test(value) && value.length >= 6;
   }
 
   async function init() {
@@ -308,6 +334,7 @@
         pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
         document.getElementById('payment-view').style.display = 'block';
         setupYappy();
+        validarForm();
       } else {
         showError("Ticket no reconocido.");
       }
@@ -347,21 +374,20 @@
   }
 
   function setupYappy() {
-    const container = document.getElementById('yappy-container');
+    const btn = document.getElementById('yappy-btn');
+    const overlay = document.getElementById('yappy-overlay');
+
+    if (!btn) return;
 
     if (parseFloat(montoGlobal) <= 0) {
-      container.innerHTML = `
-        <button onclick="liberarJanus()"
-          style="width:100%; max-width:280px; padding:16px; border-radius:12px;
-                 background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">
-          VALIDAR GRATIS
-        </button>`;
-      document.getElementById('yappy-overlay').style.display = 'none';
+      overlay.style.display = 'none';
+      btn.style.opacity = "1";
+      btn.style.pointerEvents = "none";
       return;
     }
 
-    container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
-    const btn = document.querySelector('btn-yappy');
+    if (yappyListenersReady) return;
+    yappyListenersReady = true;
 
     btn.addEventListener("eventClick", async () => {
       try {
@@ -371,23 +397,27 @@
           ticket: ticketRealGlobal,
           amount: montoGlobal
         });
+
         if (!result.ok) {
           const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
           showError(err);
           btn.isButtonLoading = false;
           return;
         }
+
         const data = result.json;
         if (data.error) {
           showError(data.error);
           btn.isButtonLoading = false;
           return;
         }
+
         btn.eventPayment({
           transactionId: data.transactionId,
           token: data.token,
           documentName: data.documentName
         });
+
         btn.isButtonLoading = false;
       } catch (e) {
         btn.isButtonLoading = false;
@@ -395,7 +425,7 @@
       }
     });
 
-    btn.addEventListener("eventSuccess", async (event) => {
+    btn.addEventListener("eventSuccess", async () => {
       if (liberando) return;
       document.getElementById('loading-view').style.display = 'block';
       document.getElementById('loading-view').innerText = "Pago exitoso. Validando ticket...";
@@ -416,7 +446,7 @@
     const docRUC = document.getElementById('doc-ruc').checked;
     const ruc = document.getElementById('ruc').value.trim();
     const email = document.getElementById('email').value.trim();
-    const btn = document.querySelector('btn-yappy');
+    const btn = document.getElementById('yappy-btn');
     const overlay = document.getElementById('yappy-overlay');
 
     const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -430,9 +460,15 @@
     }
 
     if (btn) {
-      btn.setAttribute('is-disabled', !esValido);
-      btn.style.opacity = esValido ? "1" : "0.4";
-      overlay.style.display = esValido ? "none" : "block";
+      if (esValido) {
+        btn.removeAttribute('is-disabled');
+        btn.style.opacity = "1";
+        overlay.style.display = "none";
+      } else {
+        btn.setAttribute('is-disabled', 'true');
+        btn.style.opacity = "0.4";
+        overlay.style.display = "block";
+      }
     }
   }
 
