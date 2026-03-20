@@ -118,6 +118,11 @@
         </div>
 
         <div class="form-group">
+          <label>Número de Teléfono *</label>
+          <input type="tel" id="telefono" placeholder="60000000" maxlength="8" onkeyup="validarForm()" oninput="normalizarTelefono()">
+        </div>
+
+        <div class="form-group">
           <label>Correo Electrónico *</label>
           <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
         </div>
@@ -220,6 +225,15 @@
 
   function validarRUC(ruc) {
     return /^[A-Za-z0-9-]{6,20}$/.test(ruc);
+  }
+
+  function validarTelefonoPanama(tel) {
+    return /^[6]\d{7}$/.test(tel);
+  }
+
+  function normalizarTelefono() {
+    const input = document.getElementById('telefono');
+    input.value = input.value.replace(/\D/g, '').slice(0, 8);
   }
 
   async function init() {
@@ -332,10 +346,13 @@
     btn.addEventListener("eventClick", async () => {
       try {
         btn.isButtonLoading = true;
+        const telefono = document.getElementById('telefono').value.trim();
+
         const result = await postWorker({
           action: "createYappyV2Order",
           ticket: ticketRealGlobal,
-          amount: montoGlobal
+          amount: montoGlobal,
+          phone: telefono
         });
         if (!result.ok) {
           const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
@@ -382,6 +399,7 @@
     const tipoRUC = document.getElementById('tipo-ruc').checked;
     const rucGroup = document.getElementById('ruc-group');
     const ruc = document.getElementById('ruc') ? document.getElementById('ruc').value.trim() : "";
+    const telefono = document.getElementById('telefono').value.trim();
     const email = document.getElementById('email').value.trim();
     const btn = document.querySelector('btn-yappy');
     const overlay = document.getElementById('yappy-overlay');
@@ -393,6 +411,7 @@
         (tipoCF) ||
         (tipoRUC && validarRUC(ruc))
       ) &&
+      validarTelefonoPanama(telefono) &&
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
     if (btn) {
