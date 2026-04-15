@@ -150,10 +150,14 @@
   const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
   const params = new URLSearchParams(window.location.search);
   const ticketParam = params.get('ticket');
+  const siteName = params.get('name') || "";
+  const siteCode = params.get('sitecode') || "";
 
   let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
   let liberando = false;
   let entryEpochMsGlobal = 0;
+  let lastOrderId = "";
+  let lastYappyTotal = "0.00";
 
   function appliedKey() {
     const orderId = params.get('orderId') || "";
@@ -243,6 +247,8 @@
     const yappyDomain = params.get('domain');
 
     if (yappyHash && yappyStatus && yappyOrderId && yappyDomain) {
+      lastOrderId = yappyOrderId || lastOrderId;
+
       if (isApplied()) {
         document.getElementById('loading-view').innerText = "Pago ya procesado. Verificando ticket...";
         await refrescarMinutosSalidaPorGetData();
@@ -256,25 +262,30 @@
     if (!ticketParam) { showError("Falta el ticket."); return; }
 
     try {
-      const res = await fetch(WORKER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "getData", ticket: ticketParam })
+      const res = await postWorker({
+        action: "getData",
+        ticket: ticketParam,
+        siteName,
+        siteCode
       });
 
-      const text = await res.text();
       document.getElementById('loading-view').style.display = 'none';
 
-      if (text.trim().startsWith('{')) {
-        const data = JSON.parse(text);
-        if (data.status === "ALREADY_VALIDATED") {
-          if (data.entryEpochMs && data.nowEpochMs) {
-            pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs), Number(data.paidEpochMs || 0));
-          }
-          showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
-          return;
-        }
+      if (!res.ok) {
+        showError("Error de conexión.");
+        return;
       }
+
+      if (res.json && res.json.status === "ALREADY_VALIDATED") {
+        const data = res.json;
+        if (data.entryEpochMs && data.nowEpochMs) {
+          pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs), Number(data.paidEpochMs || 0));
+        }
+        showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
+        return;
+      }
+
+      const text = res.text || "";
 
       if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
         const nowEpochMs = Date.now();
@@ -307,11 +318,18 @@
       const data = result.json;
       if (data.success && data.status === 'E') {
         ticketRealGlobal = realTicketFromUrl || orderId;
+        lastOrderId = orderId || lastOrderId;
+
         if (isApplied()) {
           await refrescarMinutosSalidaPorGetData();
           return;
         }
-        await liberarJanus();
+
+        document.getElementById('loading-view').style.display = 'block';
+        document.getElementById('loading-view').innerText = "Aceptando pago...";
+        document.getElementById('payment-view').style.display = 'none';
+
+        await aplicarPagoExterno();
       } else {
         const map = {
           "R": "Pago rechazado (no confirmado a tiempo).",
@@ -352,7 +370,9 @@
           action: "createYappyV2Order",
           ticket: ticketRealGlobal,
           amount: montoGlobal,
-          phone: telefono
+          phone: telefono,
+          siteName,
+          siteCode
         });
         if (!result.ok) {
           const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
@@ -366,6 +386,10 @@
           btn.isButtonLoading = false;
           return;
         }
+
+        lastOrderId = data.orderId || data.transactionId || "";
+        lastYappyTotal = data.total || "0.00";
+
         btn.eventPayment({
           transactionId: data.transactionId,
           token: data.token,
@@ -378,12 +402,14 @@
       }
     });
 
-    btn.addEventListener("eventSuccess", async (event) => {
+    btn.addEventListener("eventSuccess", async () => {
       if (liberando) return;
+
       document.getElementById('loading-view').style.display = 'block';
-      document.getElementById('loading-view').innerText = "Pago exitoso. Validando ticket...";
+      document.getElementById('loading-view').innerText = "Aceptando pago...";
       document.getElementById('payment-view').style.display = 'none';
-      await liberarJanus();
+
+      await aplicarPagoExterno();
     });
 
     btn.addEventListener("eventError", (event) => {
@@ -421,6 +447,59 @@
     }
   }
 
+  async function aplicarPagoExterno() {
+    if (liberando) return;
+    liberando = true;
+
+    try {
+      const email = document.getElementById('email')?.value.trim() || "";
+      const telefono = document.getElementById('telefono')?.value.trim() || "";
+
+      let rucValue = "";
+      if (document.getElementById('tipo-ruc')?.checked) {
+        rucValue = document.getElementById('ruc')?.value.trim() || "";
+      }
+
+      const confirmedAt = Date.now();
+
+      const result = await postWorker({
+        action: "applyExternalPayment",
+        ticket: ticketRealGlobal || ticketParam,
+        amount: montoGlobal,
+        tariffId: tariffIdGlobal,
+        email,
+        phone: telefono,
+        ruc: rucValue,
+        siteName,
+        siteCode,
+        orderId: lastOrderId,
+        totalYappy: lastYappyTotal,
+        confirmedAt
+      });
+
+      if (!result.ok) {
+        showError(result.json?.error || `Error aplicando pago externo (HTTP ${result.status}).`);
+        liberando = false;
+        return;
+      }
+
+      document.getElementById('loading-view').innerText = "Facturando...";
+      await new Promise(r => setTimeout(r, 2000));
+
+      document.getElementById('loading-view').innerText = "Aplicando validación...";
+      await new Promise(r => setTimeout(r, 2000));
+
+      document.getElementById('loading-view').innerText = "Confirmando...";
+      await new Promise(r => setTimeout(r, 2000));
+
+      markApplied();
+      await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
+    } catch (e) {
+      showError("Error al sincronizar con el servidor.");
+      liberando = false;
+    }
+  }
+
   async function liberarJanus() {
     if (liberando) return;
     liberando = true;
@@ -440,7 +519,9 @@
         ticket: ticketRealGlobal,
         amount: montoGlobal,
         tariffId: tariffIdGlobal,
-        nit: nitValue
+        nit: nitValue,
+        siteName,
+        siteCode
       });
 
       if (!result.ok) {
@@ -466,20 +547,17 @@
 
   async function refrescarMinutosSalidaPorGetData(titleIfOk = "PROCESADO") {
     try {
-      const verify = await fetch(WORKER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal || ticketParam })
+      const verify = await postWorker({
+        action: "getData",
+        ticket: ticketRealGlobal || ticketParam,
+        siteName,
+        siteCode
       });
 
       let tiempoFinal = "15";
-      const updateText = await verify.text();
 
-      if (updateText.trim().startsWith('{')) {
-        const updateData = JSON.parse(updateText);
-        if (updateData.status === "ALREADY_VALIDATED") {
-          tiempoFinal = updateData.remaining;
-        }
+      if (verify.ok && verify.json && verify.json.status === "ALREADY_VALIDATED") {
+        tiempoFinal = verify.json.remaining;
       }
 
       showSuccess(ticketRealGlobal || ticketParam || "—", tiempoFinal, titleIfOk);
