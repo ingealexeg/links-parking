@@ -272,7 +272,7 @@
       document.getElementById('loading-view').style.display = 'none';
 
       if (!res.ok) {
-        showError("Error de conexión.");
+        showError(res.json?.error || `Error de conexión (HTTP ${res.status}).`);
         return;
       }
 
