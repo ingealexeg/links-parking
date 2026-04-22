@@ -159,6 +159,10 @@
   let lastOrderId = "";
   let lastYappyTotal = "0.00";
 
+  function logUI(...args) {
+    console.log("[YAPPY-UI]", ...args);
+  }
+
   function appliedKey() {
     const orderId = params.get('orderId') || "";
     const t = ticketRealGlobal || ticketParam || orderId || "unknown";
@@ -168,12 +172,17 @@
   function isApplied() { return sessionStorage.getItem(appliedKey()) === "1"; }
 
   async function postWorker(payload) {
+    logUI("postWorker -> request", payload);
+
     const res = await fetch(WORKER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
     const text = await res.text();
+    logUI("postWorker <- status", res.status, "raw:", text);
+
     if (text.trim().startsWith("{")) {
       return { ok: res.ok, status: res.status, json: JSON.parse(text) };
     }
@@ -241,6 +250,8 @@
   }
 
   async function init() {
+    logUI("init()", { ticketParam, siteName, siteCode, url: window.location.href });
+
     const yappyHash = params.get('hash');
     const yappyStatus = params.get('status');
     const yappyOrderId = params.get('orderId');
@@ -248,6 +259,7 @@
 
     if (yappyHash && yappyStatus && yappyOrderId && yappyDomain) {
       lastOrderId = yappyOrderId || lastOrderId;
+      logUI("init() retorno Yappy detectado", { yappyStatus, yappyOrderId, yappyDomain });
 
       if (isApplied()) {
         document.getElementById('loading-view').innerText = "Pago ya procesado. Verificando ticket...";
@@ -278,6 +290,7 @@
 
       if (res.json && res.json.status === "ALREADY_VALIDATED") {
         const data = res.json;
+        logUI("init() ticket ya validado", data);
         if (data.entryEpochMs && data.nowEpochMs) {
           pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs), Number(data.paidEpochMs || 0));
         }
@@ -286,6 +299,7 @@
       }
 
       const text = res.text || "";
+      logUI("init() getData XML recibido", text);
 
       if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
         const nowEpochMs = Date.now();
@@ -298,11 +312,13 @@
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
         pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
         document.getElementById('payment-view').style.display = 'block';
+        logUI("init() vista de pago lista", { montoGlobal, ticketRealGlobal, tariffIdGlobal, entryEpochMs, paidEpochMs });
         setupYappy();
       } else {
         showError("Ticket no reconocido.");
       }
     } catch (e) {
+      logUI("init() excepción", e);
       showError("Error de conexión.");
     }
   }
@@ -310,12 +326,16 @@
   async function verificarPagoYappy(hash, status, orderId, domain) {
     const realTicketFromUrl = params.get('realTicket');
     try {
+      logUI("verificarPagoYappy()", { hash, status, orderId, domain, realTicketFromUrl });
+
       const result = await postWorker({ action: "verifyYappyHash", hash, status, orderId, domain });
       if (!result.ok) {
         showError(`Error validando con servidor (HTTP ${result.status}).`);
         return;
       }
       const data = result.json;
+      logUI("verificarPagoYappy() respuesta", data);
+
       if (data.success && data.status === 'E') {
         ticketRealGlobal = realTicketFromUrl || orderId;
         lastOrderId = orderId || lastOrderId;
@@ -340,6 +360,7 @@
         showError(map[status] || "La validación de pago falló o fue cancelada.");
       }
     } catch (e) {
+      logUI("verificarPagoYappy() excepción", e);
       showError("Error al validar con el servidor.");
     }
   }
@@ -348,6 +369,7 @@
     const container = document.getElementById('yappy-container');
 
     if (parseFloat(montoGlobal) <= 0) {
+      logUI("setupYappy() flujo gratis");
       container.innerHTML = `
         <button onclick="procesarValidacionJanus()"
           style="width:100%; max-width:280px; padding:16px; border-radius:12px;
@@ -358,6 +380,8 @@
       return;
     }
 
+    logUI("setupYappy() flujo pago con Yappy", { montoGlobal });
+
     container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
     const btn = document.querySelector('btn-yappy');
 
@@ -365,6 +389,7 @@
       try {
         btn.isButtonLoading = true;
         const telefono = document.getElementById('telefono').value.trim();
+        logUI("eventClick Yappy", { telefono, ticketRealGlobal, montoGlobal, siteName, siteCode });
 
         const result = await postWorker({
           action: "createYappyV2Order",
@@ -374,13 +399,18 @@
           siteName,
           siteCode
         });
+
         if (!result.ok) {
           const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
+          logUI("createYappyV2Order error", result);
           showError(err);
           btn.isButtonLoading = false;
           return;
         }
+
         const data = result.json;
+        logUI("createYappyV2Order OK", data);
+
         if (data.error) {
           showError(data.error);
           btn.isButtonLoading = false;
@@ -390,6 +420,8 @@
         lastOrderId = data.orderId || data.transactionId || "";
         lastYappyTotal = data.total || "0.00";
 
+        logUI("order lista para Yappy", { lastOrderId, lastYappyTotal });
+
         btn.eventPayment({
           transactionId: data.transactionId,
           token: data.token,
@@ -397,12 +429,22 @@
         });
         btn.isButtonLoading = false;
       } catch (e) {
+        logUI("eventClick excepción", e);
         btn.isButtonLoading = false;
         showError("Error creando orden con Yappy.");
       }
     });
 
     btn.addEventListener("eventSuccess", async () => {
+      logUI("EVENTSUCCESS recibido", {
+        lastOrderId,
+        lastYappyTotal,
+        ticketRealGlobal,
+        ticketParam,
+        montoGlobal,
+        tariffIdGlobal
+      });
+
       if (liberando) return;
 
       document.getElementById('loading-view').style.display = 'block';
@@ -414,6 +456,7 @@
 
     btn.addEventListener("eventError", (event) => {
       const d = event?.detail || {};
+      logUI("eventError Yappy", d);
       const msg = d?.code ? `Yappy error ${d.code}: ${d?.description || "Transacción fallida."}` : "Transacción fallida.";
       showError(msg);
       btn.isButtonLoading = false;
@@ -462,7 +505,7 @@
 
       const confirmedAt = Date.now();
 
-      const result = await postWorker({
+      const payload = {
         action: "applyExternalPayment",
         ticket: ticketRealGlobal || ticketParam,
         amount: montoGlobal,
@@ -475,7 +518,13 @@
         orderId: lastOrderId,
         totalYappy: lastYappyTotal,
         confirmedAt
-      });
+      };
+
+      logUI("enviarPagoAFacturacion() -> payload", payload);
+
+      const result = await postWorker(payload);
+
+      logUI("enviarPagoAFacturacion() <- respuesta", result);
 
       if (!result.ok) {
         showError(result.json?.error || `Error aplicando pago externo (HTTP ${result.status}).`);
@@ -495,6 +544,7 @@
       markApplied();
       await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
     } catch (e) {
+      logUI("enviarPagoAFacturacion() excepción", e);
       showError("Error al sincronizar con el servidor.");
       liberando = false;
     }
@@ -514,7 +564,7 @@
     }
 
     try {
-      const result = await postWorker({
+      const payload = {
         action: "applyPayment",
         ticket: ticketRealGlobal,
         amount: montoGlobal,
@@ -522,7 +572,13 @@
         nit: nitValue,
         siteName,
         siteCode
-      });
+      };
+
+      logUI("procesarValidacionJanus() -> payload", payload);
+
+      const result = await postWorker(payload);
+
+      logUI("procesarValidacionJanus() <- respuesta", result);
 
       if (!result.ok) {
         showError(`Error aplicando pago (HTTP ${result.status}).`);
@@ -540,6 +596,7 @@
         liberando = false;
       }
     } catch (e) {
+      logUI("procesarValidacionJanus() excepción", e);
       showError("Error al sincronizar con el servidor.");
       liberando = false;
     }
@@ -547,6 +604,7 @@
 
   async function refrescarMinutosSalidaPorGetData(titleIfOk = "PROCESADO") {
     try {
+      logUI("refrescarMinutosSalidaPorGetData()");
       const verify = await postWorker({
         action: "getData",
         ticket: ticketRealGlobal || ticketParam,
@@ -554,7 +612,9 @@
         siteCode
       });
 
-      let tiempoFinal = "15";
+      logUI("refresco getData respuesta", verify);
+
+      let tiempoFinal = "--";
 
       if (verify.ok && verify.json && verify.json.status === "ALREADY_VALIDATED") {
         tiempoFinal = verify.json.remaining;
@@ -562,11 +622,13 @@
 
       showSuccess(ticketRealGlobal || ticketParam || "—", tiempoFinal, titleIfOk);
     } catch (e) {
+      logUI("refrescarMinutosSalidaPorGetData() excepción", e);
       showSuccess(ticketRealGlobal || ticketParam || "—", "--", titleIfOk);
     }
   }
 
   function showSuccess(id, mins, title) {
+    logUI("showSuccess()", { id, mins, title });
     document.getElementById('header-title').innerText = title;
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'block';
@@ -575,6 +637,7 @@
   }
 
   function showError(msg) {
+    logUI("showError()", msg);
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'block';
     document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
