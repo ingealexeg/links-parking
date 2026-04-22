@@ -158,6 +158,8 @@
   let entryEpochMsGlobal = 0;
   let lastOrderId = "";
   let lastYappyTotal = "0.00";
+  let calculatedCostGlobal = 0;
+  let appliedDiscountGlobal = [];
 
   function logUI(...args) {
     console.log("[YAPPY-UI]", ...args);
@@ -192,6 +194,26 @@
   function xmlTag(xml, tag) {
     const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "i");
     return xml.match(re)?.[1] ?? "";
+  }
+
+  function xmlTags(xml, tag) {
+    const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "ig");
+    const out = [];
+    let m;
+    while ((m = re.exec(xml)) !== null) out.push(m[1]);
+    return out;
+  }
+
+  function parseAppliedDiscount(xml) {
+    const discounts = xmlTags(xml, "discountJanusId")
+      .map(v => String(v).trim())
+      .filter(Boolean)
+      .map(v => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : v;
+      });
+
+    return discounts;
   }
 
   function normalizeEpochMs(value) {
@@ -303,16 +325,28 @@
 
       if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
         const nowEpochMs = Date.now();
-        montoGlobal = xmlTag(text, "amountToPay");
+        montoGlobal = Number(xmlTag(text, "amountToPay") || 0);
+        calculatedCostGlobal = Number(xmlTag(text, "calculatedCost") || xmlTag(text, "amountToPay") || 0);
         ticketRealGlobal = xmlTag(text, "ticketNumber") || ticketParam;
-        tariffIdGlobal = xmlTag(text, "tariffProfileId") || 10;
+        tariffIdGlobal = Number(xmlTag(text, "tariffProfileId") || 10);
+        appliedDiscountGlobal = parseAppliedDiscount(text);
+
         const entryEpochMs = normalizeEpochMs(xmlTag(text, "entryTimestamp"));
         const paidEpochMs  = normalizeEpochMs(xmlTag(text, "paidTime"));
-        document.getElementById('monto-display').innerText = `$${montoGlobal}`;
+
+        document.getElementById('monto-display').innerText = `$${montoGlobal.toFixed(2)}`;
         document.getElementById('ticket-id').innerText = ticketRealGlobal;
         pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
         document.getElementById('payment-view').style.display = 'block';
-        logUI("init() vista de pago lista", { montoGlobal, ticketRealGlobal, tariffIdGlobal, entryEpochMs, paidEpochMs });
+
+        logUI("init() vista de pago lista", {
+          montoGlobal,
+          calculatedCostGlobal,
+          ticketRealGlobal,
+          tariffIdGlobal,
+          appliedDiscountGlobal
+        });
+
         setupYappy();
       } else {
         showError("Ticket no reconocido.");
@@ -337,7 +371,7 @@
       logUI("verificarPagoYappy() respuesta", data);
 
       if (data.success && data.status === 'E') {
-        ticketRealGlobal = realTicketFromUrl || orderId;
+        ticketRealGlobal = realTicketFromUrl || ticketRealGlobal || orderId;
         lastOrderId = orderId || lastOrderId;
 
         if (isApplied()) {
@@ -442,7 +476,9 @@
         ticketRealGlobal,
         ticketParam,
         montoGlobal,
-        tariffIdGlobal
+        calculatedCostGlobal,
+        tariffIdGlobal,
+        appliedDiscountGlobal
       });
 
       if (liberando) return;
@@ -508,8 +544,11 @@
       const payload = {
         action: "applyExternalPayment",
         ticket: ticketRealGlobal || ticketParam,
+        ticketIdentifier: ticketRealGlobal || ticketParam,
         amount: montoGlobal,
+        calculatedCost: calculatedCostGlobal || montoGlobal,
         tariffId: tariffIdGlobal,
+        appliedDiscount: appliedDiscountGlobal,
         email,
         phone: telefono,
         ruc: rucValue,
