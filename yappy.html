@@ -240,13 +240,6 @@
     input.value = input.value.replace(/\D/g, '').slice(0, 8);
   }
 
-  function obtenerRucSeleccionado() {
-    if (document.getElementById('tipo-ruc')?.checked) {
-      return document.getElementById('ruc')?.value.trim() || "";
-    }
-    return "CF";
-  }
-
   async function init() {
     const yappyHash = params.get('hash');
     const yappyStatus = params.get('status');
@@ -356,7 +349,7 @@
 
     if (parseFloat(montoGlobal) <= 0) {
       container.innerHTML = `
-        <button onclick="procesarValidacionGratis()"
+        <button onclick="procesarValidacionJanus()"
           style="width:100%; max-width:280px; padding:16px; border-radius:12px;
                  background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">
           VALIDAR GRATIS
@@ -461,7 +454,12 @@
     try {
       const email = document.getElementById('email')?.value.trim() || "";
       const telefono = document.getElementById('telefono')?.value.trim() || "";
-      const rucValue = obtenerRucSeleccionado();
+
+      let rucValue = "";
+      if (document.getElementById('tipo-ruc')?.checked) {
+        rucValue = document.getElementById('ruc')?.value.trim() || "";
+      }
+
       const confirmedAt = Date.now();
 
       const result = await postWorker({
@@ -474,7 +472,7 @@
         ruc: rucValue,
         siteName,
         siteCode,
-        orderId: lastOrderId || undefined,
+        orderId: lastOrderId,
         totalYappy: lastYappyTotal,
         confirmedAt
       });
@@ -502,7 +500,7 @@
     }
   }
 
-  async function procesarValidacionGratis() {
+  async function procesarValidacionJanus() {
     if (liberando) return;
     liberando = true;
 
@@ -510,34 +508,37 @@
     document.getElementById('loading-view').innerText = "Sincronizando...";
     document.getElementById('payment-view').style.display = 'none';
 
-    try {
-      const email = document.getElementById('email')?.value.trim() || "";
-      const telefono = document.getElementById('telefono')?.value.trim() || "";
-      const rucValue = obtenerRucSeleccionado();
-      const confirmedAt = Date.now();
+    let nitValue = "CF";
+    if (document.getElementById('tipo-ruc').checked) {
+      nitValue = document.getElementById('ruc')?.value.trim() || "";
+    }
 
+    try {
       const result = await postWorker({
-        action: "applyExternalPayment",
-        ticket: ticketRealGlobal || ticketParam,
+        action: "applyPayment",
+        ticket: ticketRealGlobal,
         amount: montoGlobal,
         tariffId: tariffIdGlobal,
-        email,
-        phone: telefono,
-        ruc: rucValue,
+        nit: nitValue,
         siteName,
-        siteCode,
-        totalYappy: montoGlobal || "0.00",
-        confirmedAt
+        siteCode
       });
 
       if (!result.ok) {
-        showError(result.json?.error || `Error aplicando pago externo (HTTP ${result.status}).`);
+        showError(`Error aplicando pago (HTTP ${result.status}).`);
         liberando = false;
         return;
       }
 
-      markApplied();
-      await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
+      const data = result.json;
+
+      if (data.janusResponse && data.janusResponse.includes("<status>OK</status>")) {
+        markApplied();
+        await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
+      } else {
+        showError("Janus no confirmó el OK de pago.");
+        liberando = false;
+      }
     } catch (e) {
       showError("Error al sincronizar con el servidor.");
       liberando = false;
