@@ -239,6 +239,16 @@
       padding: 20px;
     }
 
+    .pending-box {
+      background: #fff7ef;
+      color: #6b4326;
+      border: 1px solid #f1d5bc;
+      padding: 18px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
     .error-msg {
       color: #dc3545;
       font-weight: 600;
@@ -335,6 +345,13 @@
         </div>
         <div class="footer-thanks">¡Gracias por su visita!</div>
       </div>
+
+      <div id="pending-view" style="display:none;">
+        <div class="pending-box">
+          Pago recibido. Estamos confirmando la validación del ticket.<br><br>
+          Por favor intente consultar nuevamente en unos segundos.
+        </div>
+      </div>
     </div>
   </div>
 
@@ -342,7 +359,7 @@
   const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
 
   // Cargo fijo por transacción.
-  // Si el ticket no tiene monto a pagar, no se cobra FEE.
+  // Solo aplica si el ticket tiene monto mayor a 0.
   const TRANSACTION_FEE = 0.10;
 
   const params = new URLSearchParams(window.location.search);
@@ -357,8 +374,14 @@
 
   let ticketRealGlobal = "";
   let tariffIdGlobal = 10;
+  let yappyOrderIdGlobal = "";
+
   let liberando = false;
   let entryEpochMsGlobal = 0;
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
   function sitePayload() {
     return {
@@ -393,7 +416,7 @@
   }
 
   function appliedKey() {
-    const orderId = params.get('orderId') || "";
+    const orderId = params.get('orderId') || yappyOrderIdGlobal || "";
     const t = ticketRealGlobal || ticketParam || orderId || "unknown";
     const s = siteCodeParam || "unknown_site";
     return `tas_applied_${s}_${t}`;
@@ -515,9 +538,11 @@
     }
 
     if (yappyHash && yappyStatus && yappyOrderId && yappyDomain) {
+      yappyOrderIdGlobal = yappyOrderId;
+
       if (isApplied()) {
         document.getElementById('loading-view').innerText = "Pago ya procesado. Verificando ticket...";
-        await refrescarMinutosSalidaPorGetData();
+        await refrescarMinutosSalidaPorGetDataConReintentos("PROCESADO");
         return;
       }
 
@@ -531,10 +556,14 @@
       return;
     }
 
+    await cargarTicketInicial(ticketParam);
+  }
+
+  async function cargarTicketInicial(ticket) {
     try {
       const result = await postWorker({
         action: "getData",
-        ticket: ticketParam,
+        ticket,
         ...sitePayload()
       });
 
@@ -543,7 +572,7 @@
       if (!result.ok) {
         const err = result.json?.error || `Error consultando servidor (HTTP ${result.status}).`;
         showError(err);
-        return;
+        return false;
       }
 
       const text = result.text || JSON.stringify(result.json || {});
@@ -553,10 +582,12 @@
 
         if (data.error) {
           showError(data.error);
-          return;
+          return false;
         }
 
         if (data.status === "ALREADY_VALIDATED") {
+          ticketRealGlobal = data.realTicket || ticket;
+
           if (data.entryEpochMs && data.nowEpochMs) {
             pintarTiempoEnParqueo(
               Number(data.entryEpochMs),
@@ -565,8 +596,8 @@
             );
           }
 
-          showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
-          return;
+          showSuccess(ticketRealGlobal, data.remaining, "TICKET YA VALIDADO");
+          return true;
         }
       }
 
@@ -574,14 +605,13 @@
         const nowEpochMs = Date.now();
 
         const montoTicketRaw = xmlTag(text, "amountToPay");
-
         const totales = calcularTotales(montoTicketRaw);
 
         montoTicketGlobal = totales.ticket;
         feeGlobal = totales.fee;
         montoGlobal = totales.total;
 
-        ticketRealGlobal = xmlTag(text, "ticketNumber") || ticketParam;
+        ticketRealGlobal = xmlTag(text, "ticketNumber") || ticket;
         tariffIdGlobal = xmlTag(text, "tariffProfileId") || 10;
 
         const entryEpochMs = normalizeEpochMs(xmlTag(text, "entryTimestamp"));
@@ -595,12 +625,15 @@
 
         document.getElementById('payment-view').style.display = 'block';
         setupYappy();
-      } else {
-        showError("Ticket no reconocido.");
+        return true;
       }
+
+      showError("Ticket no reconocido.");
+      return false;
 
     } catch (e) {
       showError("Error de conexión.");
+      return false;
     }
   }
 
@@ -626,14 +659,15 @@
       const data = result.json;
 
       if (data.success && data.status === 'E') {
-        ticketRealGlobal = realTicketFromUrl || orderId;
+        ticketRealGlobal = realTicketFromUrl || ticketParam || orderId;
+        yappyOrderIdGlobal = orderId;
 
         if (isApplied()) {
-          await refrescarMinutosSalidaPorGetData();
+          await refrescarMinutosSalidaPorGetDataConReintentos("PROCESADO");
           return;
         }
 
-        await liberarJanus();
+        await procesarPagoConfirmadoYappy();
       } else {
         const map = {
           "R": "Pago rechazado (no confirmado a tiempo).",
@@ -699,6 +733,8 @@
           return;
         }
 
+        yappyOrderIdGlobal = data.orderId || "";
+
         btn.eventPayment({
           transactionId: data.transactionId,
           token: data.token,
@@ -713,14 +749,8 @@
       }
     });
 
-    btn.addEventListener("eventSuccess", async (event) => {
-      if (liberando) return;
-
-      document.getElementById('loading-view').style.display = 'block';
-      document.getElementById('loading-view').innerText = "Pago exitoso. Validando ticket...";
-      document.getElementById('payment-view').style.display = 'none';
-
-      await liberarJanus();
+    btn.addEventListener("eventSuccess", async () => {
+      await procesarPagoConfirmadoYappy();
     });
 
     btn.addEventListener("eventError", (event) => {
@@ -761,100 +791,200 @@
     }
   }
 
-  async function liberarJanus() {
+  function obtenerRucFinal() {
+    if (document.getElementById('tipo-ruc')?.checked) {
+      return document.getElementById('ruc')?.value.trim() || "";
+    }
+
+    return "CF";
+  }
+
+  async function ejecutarApplyPayment() {
+    const emailValue = document.getElementById('email')?.value.trim() || "";
+    const rucValue = obtenerRucFinal();
+
+    const result = await postWorker({
+      action: "applyPayment",
+      ticket: ticketRealGlobal,
+      amount: money2(montoGlobal),
+      ticketAmount: money2(montoTicketGlobal),
+      transactionFee: money2(feeGlobal),
+      tariffId: tariffIdGlobal,
+      ruc: rucValue,
+      nit: rucValue,
+      email: emailValue,
+      paymentUniqueReferenceId: yappyOrderIdGlobal || "",
+      ...sitePayload()
+    });
+
+    if (!result.ok) {
+      const err = result.json?.error || `Error aplicando pago (HTTP ${result.status}).`;
+      throw new Error(err);
+    }
+
+    const data = result.json || {};
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    if (data.mode === "JANUS_FREE") {
+      const okJanus =
+        data.janusResponse &&
+        (
+          data.janusResponse.includes("<status>OK</status>") ||
+          data.janusResponse.includes("<status>ok</status>")
+        );
+
+      if (!okJanus) {
+        throw new Error("Janus no confirmó el OK de validación gratis.");
+      }
+    }
+
+    if (data.mode === "FACTURACION_API") {
+      if (data.ok !== true || Number(data.httpStatus) !== 200) {
+        throw new Error("API facturación no confirmó 200 OK.");
+      }
+    }
+
+    return data;
+  }
+
+  async function procesarPagoConfirmadoYappy() {
     if (liberando) return;
     liberando = true;
 
-    document.getElementById('loading-view').style.display = 'block';
-    document.getElementById('loading-view').innerText = "Sincronizando...";
-    document.getElementById('payment-view').style.display = 'none';
-
-    let nitValue = "CF";
-
-    if (document.getElementById('tipo-ruc').checked) {
-      nitValue = document.getElementById('ruc')?.value.trim() || "";
-    }
-
     try {
-      const result = await postWorker({
-        action: "applyPayment",
-        ticket: ticketRealGlobal,
-        amount: money2(montoGlobal),
-        ticketAmount: money2(montoTicketGlobal),
-        transactionFee: money2(feeGlobal),
-        tariffId: tariffIdGlobal,
-        nit: nitValue,
-        ...sitePayload()
-      });
+      // 2 segundos sin cambiar nada en pantalla.
+      await sleep(2000);
 
-      if (!result.ok) {
-        const err = result.json?.error || `Error aplicando pago (HTTP ${result.status}).`;
-        showError(err);
-        liberando = false;
-        return;
-      }
+      showProcessing("FACTURANDO...");
 
-      const data = result.json;
+      // Mostrar FACTURANDO por al menos 2 segundos mientras se llama API 2100.
+      const applyPromise = ejecutarApplyPayment();
+      const minFacturando = sleep(2000);
 
-      if (data.janusResponse && data.janusResponse.includes("<status>OK</status>")) {
-        markApplied();
-        await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
-      } else if (data.janusResponse && data.janusResponse.includes("<status>ok</status>")) {
-        markApplied();
-        await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
-      } else {
-        showError("Janus no confirmó el OK de pago.");
-        liberando = false;
-      }
+      const data = await applyPromise;
+      await minFacturando;
+
+      markApplied();
+
+      showProcessing("APLICANDO VALIDACIÓN...");
+
+      // Dar tiempo a que Janus refleje el pago aplicado por API 2100.
+      await sleep(2000);
+
+      await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
 
     } catch (e) {
-      showError("Error al sincronizar con el servidor.");
+      showError(e.message || "Error al procesar el pago.");
       liberando = false;
     }
   }
 
-  async function refrescarMinutosSalidaPorGetData(titleIfOk = "PROCESADO") {
+  async function liberarJanus() {
+    // Flujo VALIDAR GRATIS: se mantiene directo a Janus.
+    if (liberando) return;
+    liberando = true;
+
     try {
-      const verify = await fetch(WORKER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      showProcessing("Sincronizando...");
+
+      await ejecutarApplyPayment();
+
+      markApplied();
+
+      await refrescarMinutosSalidaPorGetDataConReintentos("PROCESADO");
+
+    } catch (e) {
+      showError(e.message || "Error al sincronizar con el servidor.");
+      liberando = false;
+    }
+  }
+
+  async function refrescarMinutosSalidaPorGetDataConReintentos(titleIfOk = "PROCESADO") {
+    const maxIntentos = 5;
+
+    for (let intento = 1; intento <= maxIntentos; intento++) {
+      try {
+        const result = await postWorker({
           action: "getData",
           ticket: ticketRealGlobal || ticketParam,
           ...sitePayload()
-        })
-      });
+        });
 
-      let tiempoFinal = "15";
-      const updateText = await verify.text();
+        if (result.ok) {
+          const text = result.text || JSON.stringify(result.json || {});
 
-      if (updateText.trim().startsWith('{')) {
-        const updateData = JSON.parse(updateText);
+          if (text.trim().startsWith('{')) {
+            const data = JSON.parse(text);
 
-        if (updateData.status === "ALREADY_VALIDATED") {
-          tiempoFinal = updateData.remaining;
+            if (data.status === "ALREADY_VALIDATED") {
+              showSuccess(
+                data.realTicket || ticketRealGlobal || ticketParam || "—",
+                data.remaining || "--",
+                titleIfOk
+              );
+              return true;
+            }
+          }
+
+          if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
+            const amountToPay = Number(xmlTag(text, "amountToPay"));
+            const paidTime = xmlTag(text, "paidTime");
+            const freeExit = xmlTag(text, "freeExit") || "--";
+            const realTicket = xmlTag(text, "ticketNumber") || ticketRealGlobal || ticketParam || "—";
+
+            if (amountToPay === 0 && paidTime && paidTime !== "0") {
+              showSuccess(realTicket, freeExit, titleIfOk);
+              return true;
+            }
+          }
         }
+      } catch (e) {
+        // Reintento silencioso.
       }
 
-      showSuccess(ticketRealGlobal || ticketParam || "—", tiempoFinal, titleIfOk);
-
-    } catch (e) {
-      showSuccess(ticketRealGlobal || ticketParam || "—", "--", titleIfOk);
+      if (intento < maxIntentos) {
+        await sleep(2000);
+      }
     }
+
+    showPendingValidation();
+    return false;
+  }
+
+  function showProcessing(msg) {
+    document.getElementById('header-title').innerText = msg;
+    document.getElementById('payment-view').style.display = 'none';
+    document.getElementById('success-view').style.display = 'none';
+    document.getElementById('pending-view').style.display = 'none';
+    document.getElementById('loading-view').style.display = 'block';
+    document.getElementById('loading-view').innerText = msg;
   }
 
   function showSuccess(id, mins, title) {
     document.getElementById('header-title').innerText = title;
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'none';
+    document.getElementById('pending-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'block';
     document.getElementById('ticket-final-id').innerText = `ID: ${id}`;
     document.getElementById('mins-qty').innerText = mins;
   }
 
+  function showPendingValidation() {
+    document.getElementById('header-title').innerText = "VALIDACIÓN EN PROCESO";
+    document.getElementById('loading-view').style.display = 'none';
+    document.getElementById('payment-view').style.display = 'none';
+    document.getElementById('success-view').style.display = 'none';
+    document.getElementById('pending-view').style.display = 'block';
+  }
+
   function showError(msg) {
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
+    document.getElementById('pending-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'block';
     document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
   }
