@@ -1,508 +1,598 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TAS | Detalle de Pago</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
-  <script type="module" src="https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js"></script>
+// -------------------- MAPEO DE SITIOS --------------------
+// Este mismo Worker puede atender varios sitios.
+// La URL debe enviar:
+//
+// yappy.html?name=TAS_Showroom&sitecode=492&ticket=XXXX
+//
+// La llave interna del mapeo se arma así:
+// "name|sitecode"
+//
+// Para agregar otro sitio:
+// 1. Copiar el bloque "TAS_Showroom|492"
+// 2. Cambiar la llave
+// 3. Cambiar datos Janus
+// 4. Cambiar datos Yappy
+// 5. Cambiar paymentCompanyReferenceName/paymentCompanyReferenceId
 
-  <style>
-    :root { --tas-blue: #1f95f0; --tas-accent: #e88d43; --tas-green: #28a745; --tas-light-green: #e9f5f0; }
-    body { font-family: 'Montserrat', sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-    .card { background: white; width: 92%; max-width: 400px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; text-align: center; }
-    .header { background: var(--tas-blue); padding: 20px; color: white; border-bottom: 4px solid var(--tas-accent); }
-    .header h2 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
-    .content { padding: 35px 25px; }
-    .total-label { color: #888; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px; }
-    .amount { font-size: 3.2rem; font-weight: 700; color: var(--tas-blue); margin-bottom: 18px; }
-    .ticket-id-box { background: #f1f3f5; padding: 12px; border-radius: 10px; font-size: 0.85rem; color: #666; margin-bottom: 12px; }
-    .time-in-parking {
-      background: #eef6ff;
-      border: 1px solid #cfe6ff;
-      color: #2c4a66;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 0.85rem;
-      margin-bottom: 22px;
-      text-align: left;
-      display: none;
-    }
-    .time-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
-    .time-title { font-weight: 700; color: #1f95f0; margin-bottom: 6px; }
-    .form-group { text-align: left; margin-bottom: 15px; }
-    label { font-size: 0.8rem; font-weight: 700; color: #444; display: block; margin-bottom: 5px; }
-    input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
+const SITES = {
+  "TAS_Showroom|492": {
+    enabled: true,
 
-    .radio-group {
-      display: flex;
-      gap: 18px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-top: 6px;
-    }
-
-    .radio-option {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 1rem;
-      font-weight: 400;
-      color: #444;
-      cursor: pointer;
-      margin-bottom: 0;
-    }
-
-    .radio-option input {
-      width: auto;
-      padding: 0;
-      margin: 0;
-    }
-
-    #yappy-wrapper { margin-top: 25px; position: relative; width: 100%; display: center; justify-content: center; }
-    #yappy-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: not-allowed; display: block; }
-    btn-yappy { width: 100% !important; max-width: 300px; display: block; opacity: 0.4; transition: opacity 0.3s ease; }
-    .check-icon { color: var(--tas-green); font-size: 4.5rem; margin-bottom: 25px; display: block; }
-    .ticket-final { font-weight: 700; color: #444; margin-bottom: 25px; display: block; font-size: 1.05rem; }
-    .time-box { background: var(--tas-light-green); color: #2d5a4c; padding: 20px; border-radius: 12px; border: 1px solid #d4edda; margin-bottom: 30px; font-size: 1rem; line-height: 1.4; }
-    .footer-thanks { color: #aaa; font-size: 0.85rem; }
-    .loading { color: var(--tas-accent); font-weight: 600; padding: 20px; }
-    .error-msg { color: #dc3545; font-weight: 600; margin-top: 15px; font-size: 0.9rem; }
-  </style>
-</head>
-
-<body>
-  <div class="card">
-    <div class="header">
-      <h2 id="header-title">Detalle de Pago</h2>
-    </div>
-
-    <div class="content" id="main-content">
-      <div id="loading-view" class="loading">Consultando servidor...</div>
-
-      <div id="payment-view" style="display:none;">
-        <div class="total-label">Total a Pagar</div>
-        <div id="monto-display" class="amount">$ --.--</div>
-
-        <div class="ticket-id-box">
-          Ticket ID: <span id="ticket-id">---</span>
-        </div>
-
-        <div class="time-in-parking" id="parking-time-box">
-          <div class="time-title">Tiempo de uso de parqueo</div>
-          <div class="time-row"><span>Entrada:</span> <span id="entrada-dt">--/--/---- --:--:--</span></div>
-          <div class="time-row"><span>Consulta:</span> <span id="consulta-dt">--/--/---- --:--:--</span></div>
-          <div class="time-row"><span><b>Duración:</b></span> <span id="tiempo-uso"><b>--:--:--</b></span></div>
-          <div class="time-row" id="row-ultimo-pago" style="display:none;">
-            <span>Último pago:</span> <span id="ultimo-pago-dt">--/--/---- --:--:--</span>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Tipo de documento fiscal *</label>
-          <div class="radio-group">
-            <label class="radio-option">
-              <input type="radio" name="tipo-doc" id="tipo-cf" value="CF" onchange="validarForm()">
-              <span>C/F (Consumidor Final)</span>
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="tipo-doc" id="tipo-ruc" value="RUC" onchange="validarForm()">
-              <span>RUC</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="form-group" id="ruc-group" style="display:none;">
-          <label>RUC *</label>
-          <input type="text" id="ruc" placeholder="Ingrese su RUC" onkeyup="validarForm()">
-        </div>
-
-        <div class="form-group">
-          <label>Número de Teléfono *</label>
-          <input type="tel" id="telefono" placeholder="60000000" maxlength="8" onkeyup="validarForm()" oninput="normalizarTelefono()">
-        </div>
-
-        <div class="form-group">
-          <label>Correo Electrónico *</label>
-          <input type="email" id="email" placeholder="usuario@dominio.com" onkeyup="validarForm()">
-        </div>
-
-        <div id="yappy-wrapper">
-          <div id="yappy-overlay"></div>
-          <div id="yappy-container"></div>
-        </div>
-
-        <div id="error-container"></div>
-      </div>
-
-      <div id="success-view" style="display:none;">
-        <span class="check-icon">✓</span>
-        <span class="ticket-final" id="ticket-final-id">ID: ---</span>
-        <div class="time-box">
-          Tiene <b id="mins-qty">--</b> <b>minutos</b> para salir de las instalaciones.
-        </div>
-        <div class="footer-thanks">¡Gracias por su visita!</div>
-      </div>
-    </div>
-  </div>
-
-<script>
-  const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
-  const params = new URLSearchParams(window.location.search);
-  const ticketParam = params.get('ticket');
-
-  let montoGlobal = 0, ticketRealGlobal = "", tariffIdGlobal = 10;
-  let liberando = false;
-  let entryEpochMsGlobal = 0;
-
-  function appliedKey() {
-    const orderId = params.get('orderId') || "";
-    const t = ticketRealGlobal || ticketParam || orderId || "unknown";
-    return `tas_applied_${t}`;
-  }
-  function markApplied() { sessionStorage.setItem(appliedKey(), "1"); }
-  function isApplied() { return sessionStorage.getItem(appliedKey()) === "1"; }
-
-  async function postWorker(payload) {
-    const res = await fetch(WORKER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const text = await res.text();
-    if (text.trim().startsWith("{")) {
-      return { ok: res.ok, status: res.status, json: JSON.parse(text) };
-    }
-    return { ok: res.ok, status: res.status, text };
-  }
-
-  function xmlTag(xml, tag) {
-    const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "i");
-    return xml.match(re)?.[1] ?? "";
-  }
-
-  function normalizeEpochMs(value) {
-    const n = Number(value);
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    if (String(Math.trunc(n)).length <= 10) return n * 1000;
-    return n;
-  }
-
-  function fmtFechaHora(epochMs) {
-    if (!epochMs) return "--/--/---- --:--:--";
-    return new Intl.DateTimeFormat('es-GT', {
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
-    }).format(new Date(epochMs));
-  }
-
-  function fmtHHMMSS(ms) {
-    if (!Number.isFinite(ms) || ms < 0) return "--:--:--";
-    const totalSec = Math.floor(ms / 1000);
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    const pad = (x) => String(x).padStart(2, '0');
-    return `${pad(h)}:${pad(m)}:${pad(s)}`;
-  }
-
-  function pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs) {
-    if (!entryEpochMs) return;
-    entryEpochMsGlobal = entryEpochMs;
-    const diffMs = nowEpochMs - entryEpochMs;
-    document.getElementById("entrada-dt").innerText = fmtFechaHora(entryEpochMs);
-    document.getElementById("consulta-dt").innerText = fmtFechaHora(nowEpochMs);
-    document.getElementById("tiempo-uso").innerText = fmtHHMMSS(diffMs);
-    const paidMs = normalizeEpochMs(paidEpochMs);
-    if (paidMs > 0) {
-      document.getElementById("ultimo-pago-dt").innerText = fmtFechaHora(paidMs);
-      document.getElementById("row-ultimo-pago").style.display = "flex";
-    } else {
-      document.getElementById("row-ultimo-pago").style.display = "none";
-    }
-    document.getElementById("parking-time-box").style.display = "block";
-  }
-
-  function validarRUC(ruc) {
-    return /^[A-Za-z0-9-]{6,20}$/.test(ruc);
-  }
-
-  function validarTelefonoPanama(tel) {
-    return /^[6]\d{7}$/.test(tel);
-  }
-
-  function normalizarTelefono() {
-    const input = document.getElementById('telefono');
-    input.value = input.value.replace(/\D/g, '').slice(0, 8);
-  }
-
-  async function init() {
-    const yappyHash = params.get('hash');
-    const yappyStatus = params.get('status');
-    const yappyOrderId = params.get('orderId');
-    const yappyDomain = params.get('domain');
-
-    if (yappyHash && yappyStatus && yappyOrderId && yappyDomain) {
-      if (isApplied()) {
-        document.getElementById('loading-view').innerText = "Pago ya procesado. Verificando ticket...";
-        await refrescarMinutosSalidaPorGetData();
-        return;
+    janus: {
+      host: "sympathetic-retha-unsedulously.ngrok-free.dev",
+      credentials: {
+        username: "TasGT25",
+        password: "Hub$2025"
       }
-      document.getElementById('loading-view').innerText = "Validando pago con Yappy...";
-      await verificarPagoYappy(yappyHash, yappyStatus, yappyOrderId, yappyDomain);
-      return;
-    }
+    },
 
-    if (!ticketParam) { showError("Falta el ticket."); return; }
+    yappy: {
+      apiUrl: "https://api-comecom-uat.yappycloud.com",
+      merchantId: "7617fdbe-3161-4cd6-89d9-f618b24ccff7",
+      domainUrl: "https://www.yappy.com.pa/comercial/desarrolladores",
+      secretKey: "WVBfNTZGMkIzQjgtN0JGRi0zNzk1LUJEQTMtMzhGNDgwRjVCRDM2Ljc2MTdmZGJlLTMxNjEtNGNkNi04OWQ5LWY2MThiMjRjY2ZmNw==",
+      ipnUrl: "https://ingealexeg.github.io/debug.html?ipn=true"
+    },
+
+    // Estos datos quedan listos para la siguiente etapa de facturación.
+    // En este cambio inicial todavía NO se usan para WebPOS.
+    paymentCompanyReferenceName: "TAS_Showroom",
+    paymentCompanyReferenceId: "492"
+  },
+
+  // -------------------- EJEMPLO PARA AGREGAR OTRO SITIO --------------------
+  // "OTRO_SITIO|123": {
+  //   enabled: true,
+  //
+  //   janus: {
+  //     host: "otro-tunel-o-dominio.ngrok-free.dev",
+  //     credentials: {
+  //       username: "UsuarioJanus",
+  //       password: "PasswordJanus"
+  //     }
+  //   },
+  //
+  //   yappy: {
+  //     apiUrl: "https://api-comecom-uat.yappycloud.com",
+  //     merchantId: "merchant-id-del-otro-sitio",
+  //     domainUrl: "https://dominio-autorizado-del-otro-sitio.com",
+  //     secretKey: "secret-key-del-otro-sitio",
+  //     ipnUrl: "https://ingealexeg.github.io/debug.html?ipn=true"
+  //   },
+  //
+  //   paymentCompanyReferenceName: "OTRO_SITIO",
+  //   paymentCompanyReferenceId: "123"
+  // }
+};
+
+// -------------------- IMPUESTOS (CONFIGURABLE) --------------------
+// Se define el IVA de referencia (12%)
+const IVA_RATE = 0.12;
+
+// Se define el modo de cálculo del IVA:
+// 1 = IVA incluido en el total
+// 0 = IVA adicional
+const IVA_INCLUIDO = 1;
+
+/**
+ * Se generan headers CORS para permitir consumo desde navegador.
+ */
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+class AppError extends Error {
+  constructor(message, status = 500, stage = "general") {
+    super(message);
+    this.status = status;
+    this.stage = stage;
+  }
+}
+
+/**
+ * Resuelve el sitio recibido desde el frontend.
+ */
+function resolveSite(body) {
+  const name = String(body?.name || body?.siteName || "").trim();
+  const sitecode = String(body?.sitecode || body?.siteCode || "").trim();
+
+  if (!name || !sitecode) {
+    throw new AppError("Falta name o sitecode en la URL.", 400, "site-mapping");
+  }
+
+  const key = `${name}|${sitecode}`;
+  const site = SITES[key];
+
+  if (!site || site.enabled === false) {
+    throw new AppError(`Sitio no registrado en el Worker: ${name} / ${sitecode}`, 400, "site-mapping");
+  }
+
+  if (!site.janus?.host || !site.janus?.credentials?.username || !site.janus?.credentials?.password) {
+    throw new AppError(`Configuración Janus incompleta para el sitio: ${name} / ${sitecode}`, 500, "site-mapping");
+  }
+
+  if (!site.yappy?.apiUrl || !site.yappy?.merchantId || !site.yappy?.domainUrl || !site.yappy?.secretKey) {
+    throw new AppError(`Configuración Yappy incompleta para el sitio: ${name} / ${sitecode}`, 500, "site-mapping");
+  }
+
+  return {
+    key,
+    name,
+    sitecode,
+    ...site
+  };
+}
+
+/**
+ * Se genera un identificador único (UUID) para referenciar las transacciones de pago.
+ */
+function generarUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16).toUpperCase();
+  });
+}
+
+/**
+ * Se normaliza el dominio para evitar slash final accidental.
+ */
+function normalizeDomain(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+
+/**
+ * Se arma un orderId estrictamente alfanumérico con max 15.
+ */
+function makeOrderId(ticket) {
+  let raw = String(ticket || "");
+
+  if (raw.includes("-")) {
+    const partes = raw.split("-");
+    raw = (partes[1] || "").substring(2);
+  }
+
+  const clean = raw.replace(/[^a-zA-Z0-9]/g, "").slice(0, 15);
+  if (clean.length < 1) throw new Error("orderId inválido: quedó vacío");
+
+  return clean;
+}
+
+/**
+ * Se fuerza un formato monetario "0.00" como string.
+ */
+function money2(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) throw new Error(`Monto inválido: ${n}`);
+  return x.toFixed(2);
+}
+
+/**
+ * Se redondea a 2 decimales como número.
+ */
+function round2(n) {
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Se calcula subtotal/IVA/total según flag IVA_INCLUIDO.
+ */
+function calcImpuestos(monto, ivaRate, ivaIncluidoFlag) {
+  const x = Number(monto);
+  if (!Number.isFinite(x)) throw new Error("Monto inválido para cálculo de impuestos.");
+
+  const ivaIncluido = Number(ivaIncluidoFlag) === 1;
+
+  if (ivaIncluido) {
+    const total2 = round2(x);
+    const baseNum = round2(total2 / (1 + ivaRate));
+    let ivaNum = round2(total2 - baseNum);
+
+    const diff = round2(total2 - round2(baseNum + ivaNum));
+    ivaNum = round2(ivaNum + diff);
+
+    return {
+      subtotal: money2(baseNum),
+      taxes: money2(ivaNum),
+      total: money2(total2),
+      mode: "IVA_INCLUIDO"
+    };
+  } else {
+    const base2 = round2(x);
+    let ivaNum = round2(base2 * ivaRate);
+    let total2 = round2(base2 + ivaNum);
+
+    const diff = round2(total2 - round2(base2 + ivaNum));
+    ivaNum = round2(ivaNum + diff);
+    total2 = round2(base2 + ivaNum);
+
+    return {
+      subtotal: money2(base2),
+      taxes: money2(ivaNum),
+      total: money2(total2),
+      mode: "IVA_ADICIONAL"
+    };
+  }
+}
+
+/**
+ * Se lee JSON de forma segura y también se devuelve texto crudo para diagnóstico.
+ */
+async function safeJson(res) {
+  const text = await res.text();
+  try {
+    return { json: JSON.parse(text), text };
+  } catch {
+    return { json: null, text };
+  }
+}
+
+/**
+ * Se autentica con Janus usando la configuración del sitio resuelto.
+ */
+async function janusLogin(site) {
+  const loginRes = await fetch(`https://${site.janus.host}/janus-integration/api/ext/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(site.janus.credentials)
+  });
+
+  const loginText = await loginRes.text();
+  const match = loginText.match(/<value>(.*?)<\/value>/);
+
+  if (!match) {
+    throw new AppError(`No se pudo obtener token de Janus para el sitio ${site.name} (${site.sitecode}).`, 502, "janus-login");
+  }
+
+  return match[1];
+}
+
+/**
+ * Se extrae un valor de un tag XML de forma simple.
+ */
+function xmlTag(xml, tag) {
+  const re = new RegExp(`<${tag}>(.*?)<\\/${tag}>`, "i");
+  return xml.match(re)?.[1] ?? "";
+}
+
+/**
+ * Se arma una respuesta de error estructurada para el frontend.
+ */
+function jsonErrorResponse({ action, stage, message, http, yappyStatus, raw }, status = 502) {
+  return new Response(JSON.stringify({
+    error: message,
+    action,
+    stage,
+    http: http || null,
+    yappyStatus: yappyStatus || null,
+    raw: raw || null
+  }), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" }
+  });
+}
+
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
 
     try {
-      const res = await fetch(WORKER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "getData", ticket: ticketParam })
-      });
+      const body = await request.json();
+      const {
+        action,
+        ticket,
+        amount,
+        tariffId,
+        nit,
+        hash,
+        status,
+        orderId,
+        domain,
+        phone
+      } = body || {};
 
-      const text = await res.text();
-      document.getElementById('loading-view').style.display = 'none';
+      if (action === "getData") {
+        const site = resolveSite(body);
+        const token = await janusLogin(site);
 
-      if (text.trim().startsWith('{')) {
-        const data = JSON.parse(text);
-        if (data.status === "ALREADY_VALIDATED") {
-          if (data.entryEpochMs && data.nowEpochMs) {
-            pintarTiempoEnParqueo(Number(data.entryEpochMs), Number(data.nowEpochMs), Number(data.paidEpochMs || 0));
-          }
-          showSuccess(data.realTicket, data.remaining, "TICKET YA VALIDADO");
-          return;
-        }
-      }
+        const res = await fetch(`https://${site.janus.host}/janus-integration/api/ext/payment/get/ticketdata`, {
+          method: "POST",
+          headers: {
+            "Janus-TP-Authorization": token,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "mediaTypeIdentifier": "barcode",
+            "ticketIdentifier": ticket
+          })
+        });
 
-      if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
+        const ticketDataXml = await res.text();
+
+        const monto = xmlTag(ticketDataXml, "amountToPay");
+        const paidTimeValue = xmlTag(ticketDataXml, "paidTime") || "";
+        const freeExitMins = xmlTag(ticketDataXml, "freeExit") || "0";
+        const realTicketNum = xmlTag(ticketDataXml, "ticketNumber") || ticket;
+
+        const entryEpochMs = Number(xmlTag(ticketDataXml, "entryTimestamp")) || 0;
         const nowEpochMs = Date.now();
-        montoGlobal = xmlTag(text, "amountToPay");
-        ticketRealGlobal = xmlTag(text, "ticketNumber") || ticketParam;
-        tariffIdGlobal = xmlTag(text, "tariffProfileId") || 10;
-        const entryEpochMs = normalizeEpochMs(xmlTag(text, "entryTimestamp"));
-        const paidEpochMs  = normalizeEpochMs(xmlTag(text, "paidTime"));
-        document.getElementById('monto-display').innerText = `$${montoGlobal}`;
-        document.getElementById('ticket-id').innerText = ticketRealGlobal;
-        pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
-        document.getElementById('payment-view').style.display = 'block';
-        setupYappy();
-      } else {
-        showError("Ticket no reconocido.");
-      }
-    } catch (e) {
-      showError("Error de conexión.");
-    }
-  }
+        const paidEpochMs = Number(paidTimeValue) || 0;
 
-  async function verificarPagoYappy(hash, status, orderId, domain) {
-    const realTicketFromUrl = params.get('realTicket');
-    try {
-      const result = await postWorker({ action: "verifyYappyHash", hash, status, orderId, domain });
-      if (!result.ok) {
-        showError(`Error validando con servidor (HTTP ${result.status}).`);
-        return;
-      }
-      const data = result.json;
-      if (data.success && data.status === 'E') {
-        ticketRealGlobal = realTicketFromUrl || orderId;
-        if (isApplied()) {
-          await refrescarMinutosSalidaPorGetData();
-          return;
+        if (monto === "0" && paidTimeValue !== "" && paidTimeValue !== "0") {
+          return new Response(JSON.stringify({
+            status: "ALREADY_VALIDATED",
+            remaining: freeExitMins,
+            realTicket: realTicketNum,
+            entryEpochMs,
+            nowEpochMs,
+            paidEpochMs
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
         }
-        await liberarJanus();
-      } else {
-        const map = {
-          "R": "Pago rechazado (no confirmado a tiempo).",
-          "C": "Pago cancelado por el cliente.",
-          "X": "Pago expirado (no iniciado a tiempo).",
-          "E": "Pago ejecutado pero no validado localmente."
+
+        return new Response(ticketDataXml, {
+          headers: corsHeaders
+        });
+      }
+
+      if (action === "applyPayment") {
+        const site = resolveSite(body);
+        const token = await janusLogin(site);
+
+        const montoNum = Number(amount);
+        if (!Number.isFinite(montoNum)) {
+          throw new Error("amount inválido");
+        }
+
+        const uuidFactura = (montoNum > 0) ? generarUUID() : "";
+        const nitFinal = (nit && String(nit).trim() !== "") ? String(nit).toUpperCase() : "CF";
+
+        const applyBody = {
+          "mediaTypeIdentifier": "barcode",
+          "ticketIdentifier": ticket,
+          "amountToPay": montoNum,
+          "calculatedCost": montoNum,
+          "paymentUniqueReferenceId": uuidFactura,
+          "tariffProfileId": parseInt(tariffId || 10),
+          "paymentReceiptInfo": {
+            "receiptPaymentMediaIdentifier": "yappy",
+            "receiptUniqueId": uuidFactura
+          }
         };
-        showError(map[status] || "La validación de pago falló o fue cancelada.");
-      }
-    } catch (e) {
-      showError("Error al validar con el servidor.");
-    }
-  }
 
-  function setupYappy() {
-    const container = document.getElementById('yappy-container');
-
-    if (parseFloat(montoGlobal) <= 0) {
-      container.innerHTML = `
-        <button onclick="liberarJanus()"
-          style="width:100%; max-width:280px; padding:16px; border-radius:12px;
-                 background:var(--tas-green); color:white; border:none; font-weight:bold; cursor:pointer;">
-          VALIDAR GRATIS
-        </button>`;
-      document.getElementById('yappy-overlay').style.display = 'none';
-      return;
-    }
-
-    container.innerHTML = `<btn-yappy theme="sky" rounded="true" is-disabled="true"></btn-yappy>`;
-    const btn = document.querySelector('btn-yappy');
-
-    btn.addEventListener("eventClick", async () => {
-      try {
-        btn.isButtonLoading = true;
-        const telefono = document.getElementById('telefono').value.trim();
-
-        const result = await postWorker({
-          action: "createYappyV2Order",
-          ticket: ticketRealGlobal,
-          amount: montoGlobal,
-          phone: telefono
+        const res = await fetch(`https://${site.janus.host}/janus-integration/api/ext/payment/apply`, {
+          method: "POST",
+          headers: {
+            "Janus-TP-Authorization": token,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(applyBody)
         });
-        if (!result.ok) {
-          const err = result.json?.error || `No se pudo crear la orden (HTTP ${result.status}).`;
-          showError(err);
-          btn.isButtonLoading = false;
-          return;
-        }
-        const data = result.json;
-        if (data.error) {
-          showError(data.error);
-          btn.isButtonLoading = false;
-          return;
-        }
-        btn.eventPayment({
-          transactionId: data.transactionId,
-          token: data.token,
-          documentName: data.documentName
+
+        return new Response(JSON.stringify({
+          janusResponse: await res.text(),
+          uuidFactura,
+          nitFinal,
+          siteName: site.name,
+          siteCode: site.sitecode
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
-        btn.isButtonLoading = false;
-      } catch (e) {
-        btn.isButtonLoading = false;
-        showError("Error creando orden con Yappy.");
       }
-    });
 
-    btn.addEventListener("eventSuccess", async (event) => {
-      if (liberando) return;
-      document.getElementById('loading-view').style.display = 'block';
-      document.getElementById('loading-view').innerText = "Pago exitoso. Validando ticket...";
-      document.getElementById('payment-view').style.display = 'none';
-      await liberarJanus();
-    });
+      if (action === "createYappyV2Order") {
+        const site = resolveSite(body);
+        const DOMAIN = normalizeDomain(site.yappy.domainUrl);
 
-    btn.addEventListener("eventError", (event) => {
-      const d = event?.detail || {};
-      const msg = d?.code ? `Yappy error ${d.code}: ${d?.description || "Transacción fallida."}` : "Transacción fallida.";
-      showError(msg);
-      btn.isButtonLoading = false;
-    });
-  }
+        const authRes = await fetch(`${site.yappy.apiUrl}/payments/validate/merchant`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            merchantId: site.yappy.merchantId,
+            urlDomain: DOMAIN
+          })
+        });
 
-  function validarForm() {
-    const tipoCF = document.getElementById('tipo-cf').checked;
-    const tipoRUC = document.getElementById('tipo-ruc').checked;
-    const rucGroup = document.getElementById('ruc-group');
-    const ruc = document.getElementById('ruc') ? document.getElementById('ruc').value.trim() : "";
-    const telefono = document.getElementById('telefono').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const btn = document.querySelector('btn-yappy');
-    const overlay = document.getElementById('yappy-overlay');
+        const authParsed = await safeJson(authRes);
+        const authData = authParsed.json;
 
-    rucGroup.style.display = tipoRUC ? "block" : "none";
+        if (!authRes.ok) {
+          const yStatus = authData?.status || null;
+          const raw = authData ? null : authParsed.text?.slice(0, 500);
 
-    const esValido =
-      (
-        (tipoCF) ||
-        (tipoRUC && validarRUC(ruc))
-      ) &&
-      validarTelefonoPanama(telefono) &&
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+          return jsonErrorResponse({
+            action,
+            stage: "validate/merchant",
+            message: "Yappy validate/merchant falló",
+            http: authRes.status,
+            yappyStatus: yStatus,
+            raw
+          }, 502);
+        }
 
-    if (btn) {
-      btn.setAttribute('is-disabled', !esValido);
-      btn.style.opacity = esValido ? "1" : "0.4";
-      overlay.style.display = esValido ? "none" : "block";
-    }
-  }
+        if (!authData?.body?.token) {
+          const yStatus = authData?.status || null;
+          const raw = authData ? null : authParsed.text?.slice(0, 500);
 
-  async function liberarJanus() {
-    if (liberando) return;
-    liberando = true;
+          return jsonErrorResponse({
+            action,
+            stage: "validate/merchant",
+            message: "Yappy validate/merchant sin token",
+            http: authRes.status,
+            yappyStatus: yStatus,
+            raw
+          }, 502);
+        }
 
-    document.getElementById('loading-view').style.display = 'block';
-    document.getElementById('loading-view').innerText = "Sincronizando...";
-    document.getElementById('payment-view').style.display = 'none';
+        const yappyJWT = authData.body.token;
+        const cleanOrderId = makeOrderId(ticket);
 
-    let nitValue = "CF";
-    if (document.getElementById('tipo-ruc').checked) {
-      nitValue = document.getElementById('ruc')?.value.trim() || "";
-    }
+        const totalCobrar = Number(amount);
+        if (!Number.isFinite(totalCobrar) || totalCobrar <= 0) {
+          return jsonErrorResponse({
+            action,
+            stage: "payload",
+            message: "Monto inválido para Yappy (total debe ser >= 0.01).",
+            http: null,
+            yappyStatus: null,
+            raw: null
+          }, 400);
+        }
 
-    try {
-      const result = await postWorker({
-        action: "applyPayment",
-        ticket: ticketRealGlobal,
-        amount: montoGlobal,
-        tariffId: tariffIdGlobal,
-        nit: nitValue
+        const phoneFinal = String(phone || "").trim();
+        if (!/^[6]\d{7}$/.test(phoneFinal)) {
+          return jsonErrorResponse({
+            action,
+            stage: "payload",
+            message: "Número de teléfono inválido. Debe ser panameño de 8 dígitos e iniciar con 6.",
+            http: null,
+            yappyStatus: null,
+            raw: null
+          }, 400);
+        }
+
+        const { subtotal, taxes, total } = calcImpuestos(totalCobrar, IVA_RATE, IVA_INCLUIDO);
+
+        const ipn = new URL(site.yappy.ipnUrl || "https://ingealexeg.github.io/debug.html?ipn=true");
+        ipn.searchParams.set("realTicket", String(ticket));
+        ipn.searchParams.set("name", String(site.name));
+        ipn.searchParams.set("sitecode", String(site.sitecode));
+
+        const ipnUrlFinal = ipn.toString();
+
+        const orderPayload = {
+          merchantId: site.yappy.merchantId,
+          orderId: cleanOrderId,
+          domain: DOMAIN,
+          paymentDate: Math.floor(Date.now() / 1000),
+          aliasYappy: phoneFinal,
+          ipnUrl: ipnUrlFinal,
+          discount: "0.00",
+          taxes,
+          subtotal,
+          total
+        };
+
+        const orderRes = await fetch(`${site.yappy.apiUrl}/payments/payment-wc`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": yappyJWT
+          },
+          body: JSON.stringify(orderPayload)
+        });
+
+        const orderParsed = await safeJson(orderRes);
+        const orderData = orderParsed.json;
+
+        if (!orderRes.ok) {
+          const yStatus = orderData?.status || null;
+          const raw = orderData ? null : orderParsed.text?.slice(0, 800);
+
+          return jsonErrorResponse({
+            action,
+            stage: "payment-wc",
+            message: "Yappy payment-wc falló",
+            http: orderRes.status,
+            yappyStatus: yStatus,
+            raw
+          }, 502);
+        }
+
+        const b = orderData?.body;
+
+        if (!b?.transactionId || !b?.token || !b?.documentName) {
+          const yStatus = orderData?.status || null;
+          const raw = orderData ? null : orderParsed.text?.slice(0, 800);
+
+          return jsonErrorResponse({
+            action,
+            stage: "payment-wc",
+            message: "Yappy payment-wc respuesta incompleta",
+            http: orderRes.status,
+            yappyStatus: yStatus,
+            raw
+          }, 502);
+        }
+
+        return new Response(JSON.stringify({
+          transactionId: b.transactionId,
+          token: b.token,
+          documentName: b.documentName,
+          taxes,
+          subtotal,
+          total,
+          siteName: site.name,
+          siteCode: site.sitecode
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      if (action === "verifyYappyHash") {
+        const site = resolveSite(body);
+
+        if (!orderId || !status || !hash || !domain) {
+          return new Response(JSON.stringify({
+            success: false,
+            status,
+            error: "Faltan parámetros (orderId/status/hash/domain)."
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const decoded = atob(site.yappy.secretKey);
+        const secretPart = decoded.split('.')[0];
+
+        const message = String(orderId) + String(status) + String(domain);
+
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+          "raw",
+          encoder.encode(secretPart),
+          { name: "HMAC", hash: "SHA-256" },
+          false,
+          ["sign"]
+        );
+
+        const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+
+        const localHash = Array.from(new Uint8Array(signatureBuffer))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+
+        const success = (localHash === String(hash));
+
+        return new Response(JSON.stringify({
+          success,
+          status,
+          siteName: site.name,
+          siteCode: site.sitecode
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(JSON.stringify({
+        error: "Acción no reconocida."
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
 
-      if (!result.ok) {
-        showError(`Error aplicando pago (HTTP ${result.status}).`);
-        liberando = false;
-        return;
-      }
-
-      const data = result.json;
-
-      if (data.janusResponse && data.janusResponse.includes("<status>OK</status>")) {
-        markApplied();
-        await refrescarMinutosSalidaPorGetData("PAGO EXITOSO");
-      } else {
-        showError("Janus no confirmó el OK de pago.");
-        liberando = false;
-      }
     } catch (e) {
-      showError("Error al sincronizar con el servidor.");
-      liberando = false;
-    }
-  }
-
-  async function refrescarMinutosSalidaPorGetData(titleIfOk = "PROCESADO") {
-    try {
-      const verify = await fetch(WORKER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "getData", ticket: ticketRealGlobal || ticketParam })
+      return new Response(JSON.stringify({
+        error: e.message,
+        stage: e.stage || "exception"
+      }), {
+        status: e.status || 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
-
-      let tiempoFinal = "15";
-      const updateText = await verify.text();
-
-      if (updateText.trim().startsWith('{')) {
-        const updateData = JSON.parse(updateText);
-        if (updateData.status === "ALREADY_VALIDATED") {
-          tiempoFinal = updateData.remaining;
-        }
-      }
-
-      showSuccess(ticketRealGlobal || ticketParam || "—", tiempoFinal, titleIfOk);
-    } catch (e) {
-      showSuccess(ticketRealGlobal || ticketParam || "—", "--", titleIfOk);
     }
   }
-
-  function showSuccess(id, mins, title) {
-    document.getElementById('header-title').innerText = title;
-    document.getElementById('loading-view').style.display = 'none';
-    document.getElementById('success-view').style.display = 'block';
-    document.getElementById('ticket-final-id').innerText = `ID: ${id}`;
-    document.getElementById('mins-qty').innerText = mins;
-  }
-
-  function showError(msg) {
-    document.getElementById('loading-view').style.display = 'none';
-    document.getElementById('payment-view').style.display = 'block';
-    document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
-  }
-
-  window.onload = init;
-</script>
-</body>
-</html>
+};
