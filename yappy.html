@@ -526,6 +526,23 @@
     input.value = input.value.replace(/\D/g, '').slice(0, 8);
   }
 
+  function abrirAppYappyAndroid() {
+    const esAndroid = /Android/i.test(navigator.userAgent);
+
+    if (!esAndroid) {
+      console.log("[YAPPY APP] No es Android, no se intenta abrir app.");
+      return;
+    }
+
+    console.log("[YAPPY APP] Intentando abrir app Yappy con com.yappy://");
+
+    try {
+      window.location.href = "com.yappy://";
+    } catch (err) {
+      console.warn("[YAPPY APP] No se pudo abrir la app Yappy:", err);
+    }
+  }
+
   async function init() {
     const yappyHash = params.get('hash');
     const yappyStatus = params.get('status');
@@ -740,6 +757,10 @@
           token: data.token,
           documentName: data.documentName
         });
+
+        setTimeout(() => {
+          abrirAppYappyAndroid();
+        }, 500);
 
         btn.isButtonLoading = false;
 
