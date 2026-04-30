@@ -202,6 +202,16 @@
       transition: opacity 0.3s ease;
     }
 
+
+    #payment-view.pending-only .total-label,
+    #payment-view.pending-only .amount,
+    #payment-view.pending-only .breakdown-box,
+    #payment-view.pending-only .ticket-id-box,
+    #payment-view.pending-only .time-in-parking,
+    #payment-view.pending-only .form-group {
+      display: none !important;
+    }
+
     .pending-order-card {
       background: #ffffff;
       border-radius: 18px;
@@ -741,9 +751,11 @@
     const container = document.getElementById('yappy-container');
     const overlay = document.getElementById('yappy-overlay');
     const wrapper = document.getElementById('yappy-wrapper');
+    const paymentView = document.getElementById('payment-view');
 
     if (!container) return;
 
+    if (paymentView) paymentView.classList.add("pending-only");
     if (overlay) overlay.style.display = "none";
     if (wrapper) wrapper.style.display = "block";
 
@@ -796,6 +808,40 @@
     iniciarMonitorOrdenYappy();
 
     consultarEstadoOrdenYappyDesdeDB("existing-order-shown");
+  }
+
+
+  async function verificarOrdenPendienteDespuesDeGetData() {
+    if (!ticketRealGlobal || Number(montoGlobal) <= 0) {
+      return false;
+    }
+
+    try {
+      const result = await postWorker({
+        action: "getPendingYappyOrderByTicket",
+        ticket: ticketRealGlobal,
+        ...sitePayload()
+      });
+
+      if (!result.ok) {
+        console.warn("[YAPPY PENDING] No se pudo consultar orden pendiente:", result);
+        return false;
+      }
+
+      const data = result.json || {};
+
+      if (data.hasPendingOrder === true && data.orderId) {
+        yappyOrderIdGlobal = data.orderId;
+        mostrarOrdenPendienteYappy(data);
+        return true;
+      }
+
+      return false;
+
+    } catch (e) {
+      console.warn("[YAPPY PENDING] Error consultando orden pendiente:", e);
+      return false;
+    }
   }
 
   async function finalizarVisualPagoAplicado(origen = "unknown") {
@@ -1019,6 +1065,13 @@
         pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs);
 
         document.getElementById('payment-view').style.display = 'block';
+
+        const hayOrdenPendiente = await verificarOrdenPendienteDespuesDeGetData();
+
+        if (hayOrdenPendiente) {
+          return true;
+        }
+
         setupYappy();
         return true;
       }
@@ -1081,6 +1134,11 @@
 
   function setupYappy() {
     const container = document.getElementById('yappy-container');
+    const paymentView = document.getElementById('payment-view');
+    const wrapper = document.getElementById('yappy-wrapper');
+
+    if (paymentView) paymentView.classList.remove("pending-only");
+    if (wrapper) wrapper.style.display = "block";
 
     if (parseFloat(montoGlobal) <= 0) {
       container.innerHTML = `
@@ -1436,6 +1494,7 @@
   }
 
   function showError(msg) {
+    document.getElementById('payment-view')?.classList.remove("pending-only");
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'none';
