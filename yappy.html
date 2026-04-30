@@ -724,6 +724,8 @@
         btn.isButtonLoading = true;
 
         const telefono = document.getElementById('telefono').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const rucFinal = obtenerRucFinal();
 
         const result = await postWorker({
           action: "createYappyV2Order",
@@ -731,7 +733,11 @@
           amount: money2(montoGlobal),
           ticketAmount: money2(montoTicketGlobal),
           transactionFee: money2(feeGlobal),
+          tariffId: tariffIdGlobal,
           phone: telefono,
+          email,
+          ruc: rucFinal,
+          nit: rucFinal,
           ...sitePayload()
         });
 
@@ -871,6 +877,35 @@
     return data;
   }
 
+  async function ejecutarCompleteYappyOrder() {
+    if (!yappyOrderIdGlobal) {
+      throw new Error("No se tiene orderId de Yappy para completar la orden.");
+    }
+
+    const result = await postWorker({
+      action: "completeYappyOrder",
+      orderId: yappyOrderIdGlobal,
+      ...sitePayload()
+    });
+
+    if (!result.ok) {
+      const err = result.json?.error || `Error completando orden Yappy (HTTP ${result.status}).`;
+      throw new Error(err);
+    }
+
+    const data = result.json || {};
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    if (data.ok !== true) {
+      throw new Error("El servidor no confirmó la orden Yappy como completada.");
+    }
+
+    return data;
+  }
+
   async function procesarPagoConfirmadoYappy() {
     if (liberando) return;
     liberando = true;
@@ -881,8 +916,10 @@
 
       showProcessing("FACTURANDO...");
 
-      // Mostrar FACTURANDO por al menos 2 segundos mientras se llama API 2100.
-      const applyPromise = ejecutarApplyPayment();
+      // Mostrar FACTURANDO por al menos 2 segundos mientras el Worker completa la orden.
+      // Esta llamada pasa por D1 y es idempotente; si la IPN ya aplicó el pago,
+      // el Worker responde como ya aplicado sin duplicar API 2100.
+      const applyPromise = ejecutarCompleteYappyOrder();
       const minFacturando = sleep(2000);
 
       const data = await applyPromise;
