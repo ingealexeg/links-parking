@@ -202,6 +202,112 @@
       transition: opacity 0.3s ease;
     }
 
+    .pending-order-card {
+      background: #ffffff;
+      border-radius: 18px;
+      border: 1px solid #e6e8eb;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+      padding: 22px 18px;
+      text-align: center;
+      animation: softFadeIn 0.25s ease;
+    }
+
+    .pending-order-title {
+      font-size: 1rem;
+      line-height: 1.35;
+      color: var(--tas-blue);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    .pending-order-text {
+      font-size: 0.95rem;
+      color: #444;
+      line-height: 1.45;
+      margin-bottom: 16px;
+    }
+
+    .pending-order-countdown-label {
+      font-size: 0.82rem;
+      color: #777;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .pending-order-countdown {
+      font-size: 2.7rem;
+      font-weight: 700;
+      color: var(--tas-blue);
+      margin-bottom: 14px;
+      letter-spacing: 1px;
+    }
+
+    .pending-order-warning {
+      color: #777;
+      font-size: 0.78rem;
+      line-height: 1.35;
+      margin-bottom: 18px;
+    }
+
+    .pending-order-open-text {
+      color: #444;
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .pending-yappy-button {
+      width: 100%;
+      max-width: 260px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+      margin: 0 auto;
+      display: block;
+    }
+
+    .pending-yappy-button img {
+      width: 100%;
+      max-width: 260px;
+      display: block;
+      border-radius: 12px;
+    }
+
+    .pending-order-expired {
+      color: #dc3545;
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-top: 12px;
+      line-height: 1.35;
+    }
+
+    .refresh-order-button {
+      width: 100%;
+      max-width: 260px;
+      padding: 14px;
+      border-radius: 12px;
+      background: var(--tas-blue);
+      color: white;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 12px;
+      font-family: inherit;
+    }
+
+    @keyframes softFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     .check-icon {
       color: var(--tas-green);
       font-size: 4.5rem;
@@ -381,7 +487,13 @@
 
   let monitorOrdenActivo = false;
   let monitorOrdenTimer = null;
+  let eventosMonitorRegistrados = false;
   let ordenYaDetectadaAplicada = false;
+  let consultaEstadoOrdenEnCurso = false;
+  let finalizandoPagoVisual = false;
+
+  let contadorOrdenPendienteTimer = null;
+  let contadorOrdenPendienteRestante = 0;
 
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -495,6 +607,13 @@
     return `${pad(h)}:${pad(m)}:${pad(s)}`;
   }
 
+  function formatoMMSS(segundos) {
+    const total = Math.max(0, Math.floor(Number(segundos) || 0));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
   function pintarTiempoEnParqueo(entryEpochMs, nowEpochMs, paidEpochMs) {
     if (!entryEpochMs) return;
 
@@ -556,6 +675,13 @@
     monitorOrdenActivo = false;
   }
 
+  function detenerContadorOrdenPendiente() {
+    if (contadorOrdenPendienteTimer) {
+      clearInterval(contadorOrdenPendienteTimer);
+      contadorOrdenPendienteTimer = null;
+    }
+  }
+
   function limpiarVistaYappy() {
     try {
       const container = document.getElementById('yappy-container');
@@ -564,7 +690,7 @@
 
       if (overlay) overlay.style.display = 'none';
 
-      // Retira el Web Component y su modal visual si quedó esperando.
+      // Retira el Web Component o la tarjeta visual si quedó esperando.
       if (container) container.innerHTML = "";
 
       if (wrapper) wrapper.style.display = "none";
@@ -574,9 +700,146 @@
     }
   }
 
+  function pintarContadorOrdenPendiente() {
+    const el = document.getElementById("pending-order-countdown");
+    const expiredBox = document.getElementById("pending-order-expired-box");
+
+    if (el) {
+      el.innerText = formatoMMSS(contadorOrdenPendienteRestante);
+    }
+
+    if (contadorOrdenPendienteRestante <= 0) {
+      detenerContadorOrdenPendiente();
+
+      if (expiredBox) {
+        expiredBox.innerHTML = `
+          <div class="pending-order-expired">
+            La orden Yappy pendiente ha vencido.<br>
+            Actualice la consulta para generar una nueva orden.
+          </div>
+          <button class="refresh-order-button" onclick="window.location.reload()">
+            Actualizar consulta
+          </button>
+        `;
+      }
+    }
+  }
+
+  function iniciarContadorOrdenPendiente(remainingSeconds) {
+    detenerContadorOrdenPendiente();
+
+    contadorOrdenPendienteRestante = Math.max(0, Math.floor(Number(remainingSeconds) || 0));
+    pintarContadorOrdenPendiente();
+
+    contadorOrdenPendienteTimer = setInterval(() => {
+      contadorOrdenPendienteRestante -= 1;
+      pintarContadorOrdenPendiente();
+    }, 1000);
+  }
+
+  function mostrarOrdenPendienteYappy(data) {
+    const container = document.getElementById('yappy-container');
+    const overlay = document.getElementById('yappy-overlay');
+    const wrapper = document.getElementById('yappy-wrapper');
+
+    if (!container) return;
+
+    if (overlay) overlay.style.display = "none";
+    if (wrapper) wrapper.style.display = "block";
+
+    document.getElementById('error-container').innerHTML = "";
+
+    container.innerHTML = `
+      <div class="pending-order-card">
+        <div class="pending-order-title">
+          TIENES UNA ORDEN CREADA PARA ESTE TICKET
+        </div>
+
+        <div class="pending-order-text">
+          Completa el pago pendiente en la app Yappy.<br>
+          No refresques esta pantalla mientras finalizas el pago.
+        </div>
+
+        <div class="pending-order-countdown-label">
+          Tiempo restante
+        </div>
+
+        <div class="pending-order-countdown" id="pending-order-countdown">
+          --:--
+        </div>
+
+        <div class="pending-order-warning">
+          Si ya pagaste, vuelve a esta pantalla para mostrar tu tiempo de salida.
+        </div>
+
+        <div class="pending-order-open-text">
+          Presiona para abrir Yappy
+        </div>
+
+        <button class="pending-yappy-button" id="btn-open-yappy-pending" type="button">
+          <img src="yappy_logo.png" alt="Abrir Yappy">
+        </button>
+
+        <div id="pending-order-expired-box"></div>
+      </div>
+    `;
+
+    const btnOpen = document.getElementById("btn-open-yappy-pending");
+
+    if (btnOpen) {
+      btnOpen.addEventListener("click", () => {
+        abrirAppYappyAndroid();
+      });
+    }
+
+    iniciarContadorOrdenPendiente(data.remainingSeconds || 0);
+    iniciarMonitorOrdenYappy();
+
+    consultarEstadoOrdenYappyDesdeDB("existing-order-shown");
+  }
+
+  async function finalizarVisualPagoAplicado(origen = "unknown") {
+    if (finalizandoPagoVisual) return true;
+
+    finalizandoPagoVisual = true;
+    liberando = true;
+
+    detenerMonitorOrdenYappy();
+    detenerContadorOrdenPendiente();
+    limpiarVistaYappy();
+
+    try {
+      console.log("[YAPPY UI] Finalizando visualmente pago aplicado. Origen:", origen);
+
+      showProcessing("FACTURANDO...");
+
+      await sleep(2000);
+
+      markApplied();
+
+      showProcessing("APLICANDO VALIDACIÓN...");
+
+      await sleep(2000);
+
+      await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
+
+      return true;
+
+    } catch (e) {
+      showError(e.message || "Error al finalizar la validación.");
+      liberando = false;
+      finalizandoPagoVisual = false;
+      return false;
+    }
+  }
+
   async function consultarEstadoOrdenYappyDesdeDB(motivo = "manual") {
     if (!yappyOrderIdGlobal) return false;
     if (ordenYaDetectadaAplicada) return true;
+    if (finalizandoPagoVisual) return true;
+    if (consultaEstadoOrdenEnCurso) return false;
+
+    consultaEstadoOrdenEnCurso = true;
 
     try {
       console.log(`[YAPPY STATUS] Consultando estado orden ${yappyOrderIdGlobal}. Motivo: ${motivo}`);
@@ -598,35 +861,21 @@
       console.log("[YAPPY STATUS] Respuesta:", data);
 
       // Si aún no está aplicada, NO tocamos la UI.
-      // Esto permite que el contador/modal de Yappy siga visible.
+      // Esto permite que el contador/modal de Yappy o nuestra pantalla pendiente siga visible.
       if (data.applied !== true && data.status !== "APPLIED" && data.status !== "FAILED") {
         return false;
       }
 
       if (data.status === "FAILED") {
         detenerMonitorOrdenYappy();
+        detenerContadorOrdenPendiente();
         showError(data.applyLastError || "El pago fue recibido, pero falló la aplicación de la validación.");
         return false;
       }
 
       if (data.applied === true || data.status === "APPLIED") {
         ordenYaDetectadaAplicada = true;
-
-        detenerMonitorOrdenYappy();
-        limpiarVistaYappy();
-
-        if (!liberando) {
-          liberando = true;
-        }
-
-        markApplied();
-
-        showProcessing("APLICANDO VALIDACIÓN...");
-
-        await sleep(1500);
-
-        await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
-
+        await finalizarVisualPagoAplicado(`db-status-${motivo}`);
         return true;
       }
 
@@ -635,34 +884,38 @@
     } catch (e) {
       console.warn("[YAPPY STATUS] Error consultando estado:", e);
       return false;
+    } finally {
+      consultaEstadoOrdenEnCurso = false;
     }
   }
 
   function iniciarMonitorOrdenYappy() {
+    if (!eventosMonitorRegistrados) {
+      eventosMonitorRegistrados = true;
+
+      window.addEventListener("focus", () => {
+        consultarEstadoOrdenYappyDesdeDB("window-focus");
+      });
+
+      window.addEventListener("pageshow", () => {
+        consultarEstadoOrdenYappyDesdeDB("pageshow");
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+          consultarEstadoOrdenYappyDesdeDB("visibilitychange");
+        }
+      });
+    }
+
     if (monitorOrdenActivo) return;
 
     monitorOrdenActivo = true;
 
     console.log("[YAPPY STATUS] Monitor de orden iniciado.");
 
-    window.addEventListener("focus", () => {
-      consultarEstadoOrdenYappyDesdeDB("window-focus");
-    });
-
-    window.addEventListener("pageshow", () => {
-      consultarEstadoOrdenYappyDesdeDB("pageshow");
-    });
-
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) {
-        consultarEstadoOrdenYappyDesdeDB("visibilitychange");
-      }
-    });
-
-    // Mientras la página esté visible, revisa cada 5 segundos.
-    // Si aún no está APPLIED, no toca el contador.
     monitorOrdenTimer = setInterval(() => {
-      if (!document.hidden && yappyOrderIdGlobal && !ordenYaDetectadaAplicada) {
+      if (!document.hidden && yappyOrderIdGlobal && !ordenYaDetectadaAplicada && !finalizandoPagoVisual) {
         consultarEstadoOrdenYappyDesdeDB("monitor");
       }
     }, 5000);
@@ -885,6 +1138,12 @@
 
         iniciarMonitorOrdenYappy();
 
+        if (data.existingOrder === true) {
+          btn.isButtonLoading = false;
+          mostrarOrdenPendienteYappy(data);
+          return;
+        }
+
         btn.eventPayment({
           transactionId: data.transactionId,
           token: data.token,
@@ -1034,8 +1293,14 @@
   }
 
   async function procesarPagoConfirmadoYappy() {
-    if (liberando) return;
+    if (liberando || finalizandoPagoVisual) return;
+
     liberando = true;
+    finalizandoPagoVisual = true;
+
+    detenerMonitorOrdenYappy();
+    detenerContadorOrdenPendiente();
+    limpiarVistaYappy();
 
     try {
       // 2 segundos sin cambiar nada en pantalla.
@@ -1064,6 +1329,7 @@
     } catch (e) {
       showError(e.message || "Error al procesar el pago.");
       liberando = false;
+      finalizandoPagoVisual = false;
     }
   }
 
@@ -1149,6 +1415,9 @@
   }
 
   function showSuccess(id, mins, title) {
+    detenerMonitorOrdenYappy();
+    detenerContadorOrdenPendiente();
+
     document.getElementById('header-title').innerText = title;
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'none';
