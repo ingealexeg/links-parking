@@ -379,6 +379,10 @@
   let liberando = false;
   let entryEpochMsGlobal = 0;
 
+  let monitorOrdenActivo = false;
+  let monitorOrdenTimer = null;
+  let ordenYaDetectadaAplicada = false;
+
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -541,6 +545,127 @@
     } catch (err) {
       console.warn("[YAPPY APP] No se pudo abrir la app Yappy:", err);
     }
+  }
+
+  function detenerMonitorOrdenYappy() {
+    if (monitorOrdenTimer) {
+      clearInterval(monitorOrdenTimer);
+      monitorOrdenTimer = null;
+    }
+
+    monitorOrdenActivo = false;
+  }
+
+  function limpiarVistaYappy() {
+    try {
+      const container = document.getElementById('yappy-container');
+      const overlay = document.getElementById('yappy-overlay');
+      const wrapper = document.getElementById('yappy-wrapper');
+
+      if (overlay) overlay.style.display = 'none';
+
+      // Retira el Web Component y su modal visual si quedó esperando.
+      if (container) container.innerHTML = "";
+
+      if (wrapper) wrapper.style.display = "none";
+
+    } catch (e) {
+      console.warn("[YAPPY UI] No se pudo limpiar vista Yappy:", e);
+    }
+  }
+
+  async function consultarEstadoOrdenYappyDesdeDB(motivo = "manual") {
+    if (!yappyOrderIdGlobal) return false;
+    if (ordenYaDetectadaAplicada) return true;
+
+    try {
+      console.log(`[YAPPY STATUS] Consultando estado orden ${yappyOrderIdGlobal}. Motivo: ${motivo}`);
+
+      const result = await postWorker({
+        action: "getYappyOrderStatus",
+        orderId: yappyOrderIdGlobal,
+        log: motivo !== "monitor",
+        ...sitePayload()
+      });
+
+      if (!result.ok) {
+        console.warn("[YAPPY STATUS] No se pudo consultar estado:", result);
+        return false;
+      }
+
+      const data = result.json || {};
+
+      console.log("[YAPPY STATUS] Respuesta:", data);
+
+      // Si aún no está aplicada, NO tocamos la UI.
+      // Esto permite que el contador/modal de Yappy siga visible.
+      if (data.applied !== true && data.status !== "APPLIED" && data.status !== "FAILED") {
+        return false;
+      }
+
+      if (data.status === "FAILED") {
+        detenerMonitorOrdenYappy();
+        showError(data.applyLastError || "El pago fue recibido, pero falló la aplicación de la validación.");
+        return false;
+      }
+
+      if (data.applied === true || data.status === "APPLIED") {
+        ordenYaDetectadaAplicada = true;
+
+        detenerMonitorOrdenYappy();
+        limpiarVistaYappy();
+
+        if (!liberando) {
+          liberando = true;
+        }
+
+        markApplied();
+
+        showProcessing("APLICANDO VALIDACIÓN...");
+
+        await sleep(1500);
+
+        await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
+
+        return true;
+      }
+
+      return false;
+
+    } catch (e) {
+      console.warn("[YAPPY STATUS] Error consultando estado:", e);
+      return false;
+    }
+  }
+
+  function iniciarMonitorOrdenYappy() {
+    if (monitorOrdenActivo) return;
+
+    monitorOrdenActivo = true;
+
+    console.log("[YAPPY STATUS] Monitor de orden iniciado.");
+
+    window.addEventListener("focus", () => {
+      consultarEstadoOrdenYappyDesdeDB("window-focus");
+    });
+
+    window.addEventListener("pageshow", () => {
+      consultarEstadoOrdenYappyDesdeDB("pageshow");
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        consultarEstadoOrdenYappyDesdeDB("visibilitychange");
+      }
+    });
+
+    // Mientras la página esté visible, revisa cada 5 segundos.
+    // Si aún no está APPLIED, no toca el contador.
+    monitorOrdenTimer = setInterval(() => {
+      if (!document.hidden && yappyOrderIdGlobal && !ordenYaDetectadaAplicada) {
+        consultarEstadoOrdenYappyDesdeDB("monitor");
+      }
+    }, 5000);
   }
 
   async function init() {
@@ -757,6 +882,8 @@
         }
 
         yappyOrderIdGlobal = data.orderId || "";
+
+        iniciarMonitorOrdenYappy();
 
         btn.eventPayment({
           transactionId: data.transactionId,
