@@ -371,6 +371,30 @@
       margin-top: 15px;
       font-size: 0.9rem;
     }
+
+    .consulta-error-box {
+      background: #fff3f3;
+      color: #8b1e1e;
+      border: 1px solid #f2c3c3;
+      padding: 18px;
+      border-radius: 12px;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .retry-consulta-button {
+      width: 100%;
+      max-width: 260px;
+      padding: 14px;
+      border-radius: 12px;
+      background: var(--tas-blue);
+      color: white;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 14px;
+      font-family: inherit;
+    }
   </style>
 </head>
 
@@ -556,28 +580,50 @@
     return sessionStorage.getItem(appliedKey()) === "1";
   }
 
-  async function postWorker(payload) {
-    const res = await fetch(WORKER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+  async function postWorker(payload, timeoutMs = 22000) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    const text = await res.text();
+    try {
+      const res = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
 
-    if (text.trim().startsWith("{")) {
+      const text = await res.text();
+      const requestId = res.headers.get("X-Request-Id") || "";
+
+      if (text.trim().startsWith("{")) {
+        try {
+          return {
+            ok: res.ok,
+            status: res.status,
+            requestId,
+            json: JSON.parse(text)
+          };
+        } catch (e) {
+          return {
+            ok: false,
+            status: res.status,
+            requestId,
+            text,
+            parseError: e.message
+          };
+        }
+      }
+
       return {
         ok: res.ok,
         status: res.status,
-        json: JSON.parse(text)
+        requestId,
+        text
       };
-    }
 
-    return {
-      ok: res.ok,
-      status: res.status,
-      text
-    };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   function xmlTag(xml, tag) {
@@ -755,7 +801,13 @@
 
     if (!container) return;
 
-    if (paymentView) paymentView.classList.add("pending-only");
+    document.getElementById('loading-view').style.display = 'none';
+
+    if (paymentView) {
+      paymentView.style.display = "block";
+      paymentView.classList.add("pending-only");
+    }
+
     if (overlay) overlay.style.display = "none";
     if (wrapper) wrapper.style.display = "block";
 
@@ -842,6 +894,91 @@
       console.warn("[YAPPY PENDING] Error consultando orden pendiente:", e);
       return false;
     }
+  }
+
+  async function verificarOrdenPendienteAntesDeGetData(ticket) {
+    const ticketFinal = String(ticket || "").trim();
+
+    if (!ticketFinal) {
+      return false;
+    }
+
+    try {
+      document.getElementById('loading-view').innerText = "Verificando orden pendiente...";
+
+      const result = await postWorker({
+        action: "getPendingYappyOrderByTicket",
+        ticket: ticketFinal,
+        ...sitePayload()
+      });
+
+      if (!result.ok) {
+        console.warn("[YAPPY PENDING PRECHECK] No se pudo consultar orden pendiente previa:", result);
+        return false;
+      }
+
+      const data = result.json || {};
+
+      if (data.hasPendingOrder === true && data.orderId) {
+        ticketRealGlobal = data.ticket || ticketFinal;
+        yappyOrderIdGlobal = data.orderId;
+        mostrarOrdenPendienteYappy(data);
+        return true;
+      }
+
+      return false;
+
+    } catch (e) {
+      console.warn("[YAPPY PENDING PRECHECK] Error consultando orden pendiente previa:", e);
+      return false;
+    }
+  }
+
+  async function consultarGetDataInicialConReintentos(ticket) {
+    const maxIntentos = 2;
+    let ultimoResultado = null;
+
+    for (let intento = 1; intento <= maxIntentos; intento++) {
+      try {
+        document.getElementById('loading-view').innerText =
+          intento === 1
+            ? "Consultando ticket..."
+            : "El servidor está tardando. Reintentando consulta...";
+
+        const result = await postWorker({
+          action: "getData",
+          ticket,
+          ...sitePayload()
+        });
+
+        ultimoResultado = result;
+
+        if (result.ok) {
+          return result;
+        }
+
+        console.warn(`[GETDATA INIT] Intento ${intento} falló:`, result);
+
+      } catch (e) {
+        ultimoResultado = {
+          ok: false,
+          status: 0,
+          error: e.message || String(e)
+        };
+
+        console.warn(`[GETDATA INIT] Error intento ${intento}:`, e);
+      }
+
+      if (intento < maxIntentos) {
+        await sleep(1200);
+      }
+    }
+
+    return ultimoResultado || {
+      ok: false,
+      status: 0,
+      error: "No hubo respuesta del servidor."
+    };
   }
 
   async function finalizarVisualPagoAplicado(origen = "unknown") {
@@ -1002,27 +1139,45 @@
 
   async function cargarTicketInicial(ticket) {
     try {
-      const result = await postWorker({
-        action: "getData",
-        ticket,
-        ...sitePayload()
-      });
+      const hayOrdenAntes = await verificarOrdenPendienteAntesDeGetData(ticket);
+
+      if (hayOrdenAntes) {
+        return true;
+      }
+
+      const result = await consultarGetDataInicialConReintentos(ticket);
 
       document.getElementById('loading-view').style.display = 'none';
 
       if (!result.ok) {
-        const err = result.json?.error || `Error consultando servidor (HTTP ${result.status}).`;
-        showError(err);
+        console.warn("[GETDATA INIT] Falló definitivamente:", result);
+
+        const stage = result.json?.stage || "";
+        const errRaw = result.json?.error || result.error || "";
+
+        if (stage === "site-mapping" || stage === "request-json") {
+          showConsultaError(errRaw || "No se pudo iniciar la consulta.");
+        } else {
+          showConsultaError("El servidor está tardando en responder. Intente actualizar la consulta en unos segundos.");
+        }
+
         return false;
       }
 
       const text = result.text || JSON.stringify(result.json || {});
 
       if (text.trim().startsWith('{')) {
-        const data = JSON.parse(text);
+        let data = {};
+
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          showConsultaError("La respuesta del servidor no pudo interpretarse. Intente nuevamente.");
+          return false;
+        }
 
         if (data.error) {
-          showError(data.error);
+          showConsultaError(data.error);
           return false;
         }
 
@@ -1076,11 +1231,12 @@
         return true;
       }
 
-      showError("Ticket no reconocido.");
+      showConsultaError("Ticket no reconocido. Verifique el código escaneado e intente nuevamente.");
       return false;
 
     } catch (e) {
-      showError("Error de conexión.");
+      console.warn("[GETDATA INIT] Error general:", e);
+      showConsultaError("No se pudo conectar con el servidor. Intente actualizar la consulta en unos segundos.");
       return false;
     }
   }
@@ -1491,6 +1647,25 @@
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'block';
+  }
+
+  function showConsultaError(msg) {
+    document.getElementById('header-title').innerText = "DETALLE DE PAGO";
+    document.getElementById('payment-view')?.classList.remove("pending-only");
+
+    document.getElementById('loading-view').style.display = 'block';
+    document.getElementById('payment-view').style.display = 'none';
+    document.getElementById('success-view').style.display = 'none';
+    document.getElementById('pending-view').style.display = 'none';
+
+    document.getElementById('loading-view').innerHTML = `
+      <div class="consulta-error-box">
+        ${msg}<br>
+        <button class="retry-consulta-button" onclick="window.location.reload()">
+          Actualizar consulta
+        </button>
+      </div>
+    `;
   }
 
   function showError(msg) {
