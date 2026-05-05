@@ -382,6 +382,29 @@
       line-height: 1.45;
     }
 
+    .consulta-ticket-box {
+      background: #fff7ef;
+      color: #6b4326;
+      border: 1px solid #f1d5bc;
+      padding: 18px;
+      border-radius: 12px;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .consulta-ticket-title {
+      font-weight: 700;
+      color: #9a541f;
+      font-size: 1rem;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .consulta-ticket-text {
+      color: #6b4326;
+      margin-bottom: 2px;
+    }
+
     .retry-consulta-button {
       width: 100%;
       max-width: 260px;
@@ -981,6 +1004,52 @@
     };
   }
 
+  function esErrorDeTicketConsulta(data = {}) {
+    const stage = String(data.stage || "").toLowerCase();
+    const code = String(data.code || data.status || "").toUpperCase();
+
+    return (
+      code === "TICKET_NOT_FOUND" ||
+      code === "TICKET_NOT_ACTIVE" ||
+      code === "JANUS_BUSINESS_ERROR" ||
+      stage === "janus-ticket-not-found" ||
+      stage === "janus-ticket-not-active" ||
+      stage === "janus-business-error"
+    );
+  }
+
+  function mensajeTicketNoEncontrado(data = {}) {
+    return data.friendlyMessage ||
+      data.error ||
+      "No encontramos este ticket activo en el parqueo. Verifique que está usando el ticket correcto con el que ingresó. Si este ticket ya fue utilizado para salir anteriormente, debe usar el ticket actual.";
+  }
+
+  function clasificarErrorConsulta(result = {}) {
+    const data = result.json || {};
+    const stage = String(data.stage || "").toLowerCase();
+    const errRaw = data.friendlyMessage || data.error || result.error || "";
+
+    if (esErrorDeTicketConsulta(data)) {
+      return {
+        type: "ticket",
+        message: mensajeTicketNoEncontrado(data)
+      };
+    }
+
+    if (stage === "site-mapping" || stage === "request-json") {
+      return {
+        type: "config",
+        message: errRaw || "No se pudo iniciar la consulta."
+      };
+    }
+
+    return {
+      type: "server",
+      message: "El servidor está tardando en responder. Intente actualizar la consulta en unos segundos."
+    };
+  }
+
+
   async function finalizarVisualPagoAplicado(origen = "unknown") {
     if (finalizandoPagoVisual) return true;
 
@@ -1152,13 +1221,12 @@
       if (!result.ok) {
         console.warn("[GETDATA INIT] Falló definitivamente:", result);
 
-        const stage = result.json?.stage || "";
-        const errRaw = result.json?.error || result.error || "";
+        const clasificado = clasificarErrorConsulta(result);
 
-        if (stage === "site-mapping" || stage === "request-json") {
-          showConsultaError(errRaw || "No se pudo iniciar la consulta.");
+        if (clasificado.type === "ticket") {
+          showTicketNoEncontrado(clasificado.message);
         } else {
-          showConsultaError("El servidor está tardando en responder. Intente actualizar la consulta en unos segundos.");
+          showConsultaError(clasificado.message);
         }
 
         return false;
@@ -1173,6 +1241,11 @@
           data = JSON.parse(text);
         } catch (e) {
           showConsultaError("La respuesta del servidor no pudo interpretarse. Intente nuevamente.");
+          return false;
+        }
+
+        if (esErrorDeTicketConsulta(data)) {
+          showTicketNoEncontrado(mensajeTicketNoEncontrado(data));
           return false;
         }
 
@@ -1231,7 +1304,7 @@
         return true;
       }
 
-      showConsultaError("Ticket no reconocido. Verifique el código escaneado e intente nuevamente.");
+      showTicketNoEncontrado("No encontramos este ticket activo en el parqueo. Verifique que está usando el ticket correcto con el que ingresó. Si este ticket ya fue utilizado para salir anteriormente, debe usar el ticket actual.");
       return false;
 
     } catch (e) {
@@ -1647,6 +1720,28 @@
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'block';
+  }
+
+  function showTicketNoEncontrado(msg) {
+    document.getElementById('header-title').innerText = "TICKET NO ENCONTRADO";
+    document.getElementById('payment-view')?.classList.remove("pending-only");
+
+    document.getElementById('loading-view').style.display = 'block';
+    document.getElementById('payment-view').style.display = 'none';
+    document.getElementById('success-view').style.display = 'none';
+    document.getElementById('pending-view').style.display = 'none';
+
+    document.getElementById('loading-view').innerHTML = `
+      <div class="consulta-ticket-box">
+        <div class="consulta-ticket-title">Ticket no encontrado</div>
+        <div class="consulta-ticket-text">
+          ${msg}
+        </div>
+        <button class="retry-consulta-button" onclick="window.location.reload()">
+          Intentar nuevamente
+        </button>
+      </div>
+    `;
   }
 
   function showConsultaError(msg) {
