@@ -529,10 +529,7 @@
 
   const siteNameParam = params.get('name');
   const siteCodeParam = params.get('sitecode');
-  // QR público usa "identifier" para compatibilidad con HUB/J4M/CC600.
-  // Internamente lo seguimos manejando como ticketParam,
-  // porque el Worker y Janus esperan recibir "ticket".
-  const ticketParam = params.get('identifier') || params.get('ticket');
+  const ticketParam = params.get('identifier');
 
   let montoTicketGlobal = 0;
   let feeGlobal = 0;
