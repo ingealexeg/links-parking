@@ -527,27 +527,9 @@
 
   const params = new URLSearchParams(window.location.search);
 
-  function getParamFromUrl(name) {
-    const directValue = params.get(name);
-
-    if (directValue && directValue.trim()) {
-      return directValue.trim();
-    }
-
-    const href = window.location.href.replace(/&amp;/g, "&");
-    const regex = new RegExp(`[?&]${name}=([^&#]*)`, "i");
-    const match = href.match(regex);
-
-    if (match && match[1]) {
-      return decodeURIComponent(match[1].replace(/\+/g, " ")).trim();
-    }
-
-    return "";
-  }
-
-  const siteNameParam = getParamFromUrl('name');
-  const siteCodeParam = getParamFromUrl('sitecode');
-  const ticketParam = getParamFromUrl('identifier');
+  const siteNameParam = params.get('name');
+  const siteCodeParam = params.get('sitecode');
+  const ticketParam = params.get('identifier');
 
   let montoTicketGlobal = 0;
   let feeGlobal = 0;
