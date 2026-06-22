@@ -212,10 +212,6 @@
       display: none !important;
     }
 
-    #payment-view.free-only .form-group {
-      display: none !important;
-    }
-
     .pending-order-card {
       background: #ffffff;
       border-radius: 18px;
@@ -443,6 +439,10 @@
             <span>Costo del ticket</span>
             <strong id="ticket-cost-display">$ --.--</strong>
           </div>
+          <div class="breakdown-row">
+            <span>FEE transacción</span>
+            <strong id="fee-display">$ --.--</strong>
+          </div>
           <div class="breakdown-row total">
             <span>Valor final a pagar</span>
             <strong id="final-total-display">$ --.--</strong>
@@ -482,11 +482,6 @@
           <input type="text" id="ruc" placeholder="Ingrese su RUC" onkeyup="validarForm()">
         </div>
 
-        <div class="form-group" id="client-name-group" style="display:none;">
-          <label>Nombre *</label>
-          <input type="text" id="client-name" placeholder="Nombre o razón social" onkeyup="validarForm()">
-        </div>
-
         <div class="form-group">
           <label>Número de Teléfono *</label>
           <input type="tel" id="telefono" placeholder="60000000" maxlength="8" onkeyup="validarForm()" oninput="normalizarTelefono()">
@@ -517,10 +512,7 @@
       <div id="pending-view" style="display:none;">
         <div class="pending-box">
           Pago recibido. Estamos confirmando la validación del ticket.<br><br>
-          Por favor intente consultar nuevamente en unos segundos.<br><br>
-          <button class="retry-consulta-button" type="button" onclick="comprobarValidacionPendiente()">
-            Comprobar validación
-          </button>
+          Por favor intente consultar nuevamente en unos segundos.
         </div>
       </div>
     </div>
@@ -529,14 +521,18 @@
 <script>
   const WORKER_URL = "https://jms-get.ingealexeg.workers.dev/";
 
-  // Cargo adicional deshabilitado. El total a cobrar será únicamente el costo del ticket.
-  const TRANSACTION_FEE = 0.00;
+  // Cargo fijo por transacción.
+  // Solo aplica si el ticket tiene monto mayor a 0.
+  const TRANSACTION_FEE = 0.10;
 
   const params = new URLSearchParams(window.location.search);
 
   const siteNameParam = params.get('name');
   const siteCodeParam = params.get('sitecode');
-  const ticketParam = params.get('ticket');
+  // QR público usa "identifier" para compatibilidad con HUB/J4M/CC600.
+  // Internamente lo seguimos manejando como ticketParam,
+  // porque el Worker y Janus esperan recibir "ticket".
+  const ticketParam = params.get('identifier') || params.get('ticket');
 
   let montoTicketGlobal = 0;
   let feeGlobal = 0;
@@ -582,16 +578,15 @@
 
   function calcularTotales(montoTicket) {
     const ticket = round2(Number(montoTicket) || 0);
-    const fee = 0;
-    const total = round2(ticket);
+    const fee = ticket > 0 ? round2(TRANSACTION_FEE) : 0;
+    const total = round2(ticket + fee);
 
     return { ticket, fee, total };
   }
 
   function pintarTotales(ticket, fee, total) {
     document.getElementById('ticket-cost-display').innerText = `$${money2(ticket)}`;
-    const feeDisplay = document.getElementById('fee-display');
-    if (feeDisplay) feeDisplay.innerText = `$${money2(fee)}`;
+    document.getElementById('fee-display').innerText = `$${money2(fee)}`;
     document.getElementById('final-total-display').innerText = `$${money2(total)}`;
     document.getElementById('monto-display').innerText = `$${money2(total)}`;
   }
@@ -777,7 +772,7 @@
 
       if (overlay) overlay.style.display = 'none';
 
-      // La vista retira el Web Component o la tarjeta visual si queda en espera.
+      // Retira el Web Component o la tarjeta visual si quedó esperando.
       if (container) container.innerHTML = "";
 
       if (wrapper) wrapper.style.display = "none";
@@ -1120,7 +1115,8 @@
 
       console.log("[YAPPY STATUS] Respuesta:", data);
 
-      // La función mantiene la interfaz actual mientras la orden siga pendiente.
+      // Si aún no está aplicada, NO tocamos la UI.
+      // Esto permite que el contador/modal de Yappy o nuestra pantalla pendiente siga visible.
       if (data.applied !== true && data.status !== "APPLIED" && data.status !== "FAILED") {
         return false;
       }
@@ -1373,15 +1369,10 @@
     const paymentView = document.getElementById('payment-view');
     const wrapper = document.getElementById('yappy-wrapper');
 
-    if (paymentView) {
-      paymentView.classList.remove("pending-only");
-      paymentView.classList.remove("free-only");
-    }
+    if (paymentView) paymentView.classList.remove("pending-only");
     if (wrapper) wrapper.style.display = "block";
 
     if (parseFloat(montoGlobal) <= 0) {
-      if (paymentView) paymentView.classList.add("free-only");
-
       container.innerHTML = `
         <button onclick="liberarJanus()"
           style="width:100%; max-width:280px; padding:16px; border-radius:12px;
@@ -1403,7 +1394,6 @@
         const telefono = document.getElementById('telefono').value.trim();
         const email = document.getElementById('email').value.trim();
         const rucFinal = obtenerRucFinal();
-        const clientNameFinal = obtenerClientNameFinal();
 
         const result = await postWorker({
           action: "createYappyV2Order",
@@ -1416,8 +1406,6 @@
           email,
           ruc: rucFinal,
           nit: rucFinal,
-          clientName: clientNameFinal,
-          ClientName: clientNameFinal,
           ...sitePayload()
         });
 
@@ -1483,23 +1471,18 @@
     const tipoCF = document.getElementById('tipo-cf').checked;
     const tipoRUC = document.getElementById('tipo-ruc').checked;
     const rucGroup = document.getElementById('ruc-group');
-    const clientNameGroup = document.getElementById('client-name-group');
     const ruc = document.getElementById('ruc') ? document.getElementById('ruc').value.trim() : "";
-    const clientName = document.getElementById('client-name') ? document.getElementById('client-name').value.trim() : "";
     const telefono = document.getElementById('telefono').value.trim();
     const email = document.getElementById('email').value.trim();
     const btn = document.querySelector('btn-yappy');
     const overlay = document.getElementById('yappy-overlay');
 
     rucGroup.style.display = tipoRUC ? "block" : "none";
-    if (clientNameGroup) clientNameGroup.style.display = tipoRUC ? "block" : "none";
-
-    const nombreValido = clientName.replace(/\s+/g, " ").trim().length >= 2;
 
     const esValido =
       (
         tipoCF ||
-        (tipoRUC && validarRUC(ruc) && nombreValido)
+        (tipoRUC && validarRUC(ruc))
       ) &&
       validarTelefonoPanama(telefono) &&
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -1519,18 +1502,9 @@
     return "CF";
   }
 
-  function obtenerClientNameFinal() {
-    if (document.getElementById('tipo-ruc')?.checked) {
-      return (document.getElementById('client-name')?.value || "").replace(/\s+/g, " ").trim();
-    }
-
-    return "";
-  }
-
   async function ejecutarApplyPayment() {
     const emailValue = document.getElementById('email')?.value.trim() || "";
     const rucValue = obtenerRucFinal();
-    const clientNameValue = obtenerClientNameFinal();
 
     const result = await postWorker({
       action: "applyPayment",
@@ -1542,8 +1516,6 @@
       ruc: rucValue,
       nit: rucValue,
       email: emailValue,
-      clientName: clientNameValue,
-      ClientName: clientNameValue,
       paymentUniqueReferenceId: yappyOrderIdGlobal || "",
       ...sitePayload()
     });
@@ -1561,19 +1533,14 @@
 
     if (data.mode === "JANUS_FREE") {
       const okJanus =
-        data.ok === true &&
+        data.janusResponse &&
         (
-          Number(data.httpStatus) === 200 ||
-          !data.httpStatus
-        ) &&
-        (
-          !data.janusResponse ||
           data.janusResponse.includes("<status>OK</status>") ||
           data.janusResponse.includes("<status>ok</status>")
         );
 
       if (!okJanus) {
-        throw new Error("Janus no confirmó la validación gratis.");
+        throw new Error("Janus no confirmó el OK de validación gratis.");
       }
     }
 
@@ -1626,11 +1593,14 @@
     limpiarVistaYappy();
 
     try {
+      // 2 segundos sin cambiar nada en pantalla.
       await sleep(2000);
 
       showProcessing("FACTURANDO...");
 
-      // La función muestra FACTURANDO mientras el Worker completa la orden de forma idempotente.
+      // Mostrar FACTURANDO por al menos 2 segundos mientras el Worker completa la orden.
+      // Esta llamada pasa por D1 y es idempotente; si la IPN ya aplicó el pago,
+      // el Worker responde como ya aplicado sin duplicar API 2100.
       const applyPromise = ejecutarCompleteYappyOrder();
       const minFacturando = sleep(2000);
 
@@ -1641,7 +1611,7 @@
 
       showProcessing("APLICANDO VALIDACIÓN...");
 
-      // La función espera a que Janus refleje el pago aplicado por API de facturación.
+      // Dar tiempo a que Janus refleje el pago aplicado por API 2100.
       await sleep(2000);
 
       await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
@@ -1654,7 +1624,7 @@
   }
 
   async function liberarJanus() {
-    // El flujo VALIDAR GRATIS se mantiene directo hacia servidor intermedio.
+    // Flujo VALIDAR GRATIS: se mantiene directo a Janus.
     if (liberando) return;
     liberando = true;
 
@@ -1680,7 +1650,7 @@
       try {
         const result = await postWorker({
           action: "getData",
-          ticket: ticketParam || ticketRealGlobal,
+          ticket: ticketRealGlobal || ticketParam,
           ...sitePayload()
         });
 
@@ -1713,7 +1683,7 @@
           }
         }
       } catch (e) {
-        // La función reintenta sin mostrar error al usuario.
+        // Reintento silencioso.
       }
 
       if (intento < maxIntentos) {
@@ -1745,19 +1715,6 @@
     document.getElementById('success-view').style.display = 'block';
     document.getElementById('ticket-final-id').innerText = `ID: ${id}`;
     document.getElementById('mins-qty').innerText = mins;
-  }
-
-  async function comprobarValidacionPendiente() {
-    if (finalizandoPagoVisual) return;
-
-    document.getElementById('header-title').innerText = "COMPROBANDO VALIDACIÓN";
-    document.getElementById('pending-view').style.display = 'none';
-    document.getElementById('payment-view').style.display = 'none';
-    document.getElementById('success-view').style.display = 'none';
-    document.getElementById('loading-view').style.display = 'block';
-    document.getElementById('loading-view').innerText = "Comprobando validación...";
-
-    await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
   }
 
   function showPendingValidation() {
