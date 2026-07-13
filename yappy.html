@@ -482,11 +482,6 @@
           <input type="text" id="ruc" placeholder="Ingrese su RUC" onkeyup="validarForm()">
         </div>
 
-        <div class="form-group" id="client-name-group" style="display:none;">
-          <label>Nombre *</label>
-          <input type="text" id="client-name" placeholder="Nombre o razón social" onkeyup="validarForm()">
-        </div>
-
         <div class="form-group">
           <label>Número de Teléfono *</label>
           <input type="tel" id="telefono" placeholder="60000000" maxlength="8" onkeyup="validarForm()" oninput="normalizarTelefono()">
@@ -1403,8 +1398,6 @@
         const telefono = document.getElementById('telefono').value.trim();
         const email = document.getElementById('email').value.trim();
         const rucFinal = obtenerRucFinal();
-        const clientNameFinal = obtenerClientNameFinal();
-
         const result = await postWorker({
           action: "createYappyV2Order",
           ticket: ticketRealGlobal,
@@ -1416,8 +1409,6 @@
           email,
           ruc: rucFinal,
           nit: rucFinal,
-          clientName: clientNameFinal,
-          ClientName: clientNameFinal,
           ...sitePayload()
         });
 
@@ -1483,23 +1474,17 @@
     const tipoCF = document.getElementById('tipo-cf').checked;
     const tipoRUC = document.getElementById('tipo-ruc').checked;
     const rucGroup = document.getElementById('ruc-group');
-    const clientNameGroup = document.getElementById('client-name-group');
     const ruc = document.getElementById('ruc') ? document.getElementById('ruc').value.trim() : "";
-    const clientName = document.getElementById('client-name') ? document.getElementById('client-name').value.trim() : "";
     const telefono = document.getElementById('telefono').value.trim();
     const email = document.getElementById('email').value.trim();
     const btn = document.querySelector('btn-yappy');
     const overlay = document.getElementById('yappy-overlay');
 
     rucGroup.style.display = tipoRUC ? "block" : "none";
-    if (clientNameGroup) clientNameGroup.style.display = tipoRUC ? "block" : "none";
-
-    const nombreValido = clientName.replace(/\s+/g, " ").trim().length >= 2;
-
     const esValido =
       (
         tipoCF ||
-        (tipoRUC && validarRUC(ruc) && nombreValido)
+        (tipoRUC && validarRUC(ruc))
       ) &&
       validarTelefonoPanama(telefono) &&
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -1519,19 +1504,9 @@
     return "CF";
   }
 
-  function obtenerClientNameFinal() {
-    if (document.getElementById('tipo-ruc')?.checked) {
-      return (document.getElementById('client-name')?.value || "").replace(/\s+/g, " ").trim();
-    }
-
-    return "";
-  }
-
   async function ejecutarApplyPayment() {
     const emailValue = document.getElementById('email')?.value.trim() || "";
     const rucValue = obtenerRucFinal();
-    const clientNameValue = obtenerClientNameFinal();
-
     const result = await postWorker({
       action: "applyPayment",
       ticket: ticketRealGlobal,
@@ -1542,8 +1517,6 @@
       ruc: rucValue,
       nit: rucValue,
       email: emailValue,
-      clientName: clientNameValue,
-      ClientName: clientNameValue,
       paymentUniqueReferenceId: yappyOrderIdGlobal || "",
       ...sitePayload()
     });
