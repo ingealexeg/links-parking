@@ -1054,7 +1054,24 @@
   }
 
 
-  async function finalizarVisualPagoAplicado(origen = "unknown") {
+  function extraerConfirmacionJanus(data = {}) {
+    const paidTime = String(data.paidTime || data.janusPaidTime || "");
+    const freeExit = data.freeExit ?? data.freeExitMinutes ?? null;
+    const realTicket = data.realTicket || data.ticket || ticketRealGlobal || ticketParam || "—";
+    const aplicada = data.applied === true || data.status === "APPLIED" || data.alreadyApplied === true;
+
+    if (!aplicada || !paidTime || paidTime === "0" || freeExit === null || freeExit === undefined || freeExit === "") {
+      return null;
+    }
+
+    return {
+      paidTime,
+      freeExit: String(freeExit),
+      realTicket
+    };
+  }
+
+  async function finalizarVisualPagoAplicado(origen = "unknown", orderData = null) {
     if (finalizandoPagoVisual) return true;
 
     finalizandoPagoVisual = true;
@@ -1068,16 +1085,20 @@
       console.log("[YAPPY UI] Finalizando visualmente pago aplicado. Origen:", origen);
 
       showProcessing("FACTURANDO...");
-
       await sleep(5000);
 
       markApplied();
 
       showProcessing("APLICANDO VALIDACIÓN...");
-
       await sleep(5000);
 
-      await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
+      const confirmacion = extraerConfirmacionJanus(orderData || {});
+
+      if (confirmacion) {
+        showSuccess(confirmacion.realTicket, confirmacion.freeExit, "PAGO EXITOSO");
+      } else {
+        await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
+      }
 
       return true;
 
@@ -1130,7 +1151,7 @@
 
       if (data.applied === true || data.status === "APPLIED") {
         ordenYaDetectadaAplicada = true;
-        await finalizarVisualPagoAplicado(`db-status-${motivo}`);
+        await finalizarVisualPagoAplicado(`db-status-${motivo}`, data);
         return true;
       }
 
@@ -1569,7 +1590,7 @@
       action: "completeYappyOrder",
       orderId: yappyOrderIdGlobal,
       ...sitePayload()
-    });
+    }, 120000);
 
     if (!result.ok) {
       const err = result.json?.error || `Error completando orden Yappy (HTTP ${result.status}).`;
@@ -1589,6 +1610,35 @@
     return data;
   }
 
+  async function esperarOrdenAplicadaDesdeDB(maxIntentos = 18, pausaMs = 5000) {
+    for (let intento = 1; intento <= maxIntentos; intento++) {
+      const result = await postWorker({
+        action: "getYappyOrderStatus",
+        orderId: yappyOrderIdGlobal,
+        log: false,
+        ...sitePayload()
+      });
+
+      if (result.ok) {
+        const data = result.json || {};
+
+        if (data.applied === true || data.status === "APPLIED") {
+          return data;
+        }
+
+        if (data.status === "FAILED") {
+          throw new Error(data.applyLastError || "Janus no confirmó la aplicación del pago.");
+        }
+      }
+
+      if (intento < maxIntentos) {
+        await sleep(pausaMs);
+      }
+    }
+
+    throw new Error("El pago fue recibido, pero Janus todavía no confirma la validación.");
+  }
+
   async function procesarPagoConfirmadoYappy() {
     if (liberando || finalizandoPagoVisual) return;
 
@@ -1604,21 +1654,34 @@
 
       showProcessing("FACTURANDO...");
 
-      // La función muestra FACTURANDO mientras el Worker completa la orden de forma idempotente.
-      const applyPromise = ejecutarCompleteYappyOrder();
-      const minFacturando = sleep(5000);
+      // El Worker ejecuta apply y confirma cada intento mediante getData.
+      const completionPromise = ejecutarCompleteYappyOrder();
 
-      const data = await applyPromise;
-      await minFacturando;
+      await sleep(5000);
+      showProcessing("APLICANDO VALIDACIÓN...");
+      const minAplicando = sleep(5000);
 
+      let data = await completionPromise;
+
+      // Si la IPN tomó primero el bloqueo, el navegador espera el resultado en D1
+      // sin lanzar otro apply ni consultar directamente a Janus.
+      if (data.inProgress === true || (data.applied !== true && data.status !== "APPLIED" && data.alreadyApplied !== true)) {
+        data = await esperarOrdenAplicadaDesdeDB();
+      }
+
+      // La orden ya fue confirmada por el Worker o por el estado guardado en D1.
       markApplied();
 
-      showProcessing("APLICANDO VALIDACIÓN...");
+      // Conserva visible el mensaje APLICANDO VALIDACIÓN al menos cinco segundos.
+      await minAplicando;
 
-      // La función espera a que Janus refleje el pago aplicado por API de facturación.
-      await sleep(5000);
+      const confirmacion = extraerConfirmacionJanus(data);
 
-      await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
+      if (confirmacion) {
+        showSuccess(confirmacion.realTicket, confirmacion.freeExit, "PAGO EXITOSO");
+      } else {
+        await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
+      }
 
     } catch (e) {
       showError(e.message || "Error al procesar el pago.");
@@ -1654,7 +1717,7 @@
       try {
         const result = await postWorker({
           action: "getData",
-          ticket: ticketParam || ticketRealGlobal,
+          ticket: ticketRealGlobal || ticketParam,
           ...sitePayload()
         });
 
