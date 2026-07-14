@@ -360,9 +360,9 @@
     }
 
     .pending-box {
-      background: #fff7ef;
-      color: #6b4326;
-      border: 1px solid #f1d5bc;
+      background: var(--tas-light-green);
+      color: #2d5a4c;
+      border: 1px solid #d4edda;
       padding: 18px;
       border-radius: 12px;
       font-size: 0.95rem;
@@ -511,10 +511,11 @@
 
       <div id="pending-view" style="display:none;">
         <div class="pending-box">
-          Pago recibido. Estamos confirmando la validación del ticket.<br><br>
-          Por favor intente consultar nuevamente en unos segundos.<br><br>
+          <span class="check-icon">✓</span>
+          Pago recibido, estamos confirmando la validación de su ticket.<br><br>
+          Por favor presione el botón para confirmar su tiempo permitido para salir.<br><br>
           <button class="retry-consulta-button" type="button" onclick="comprobarValidacionPendiente()">
-            Comprobar validación
+            VERIFICAR TIEMPO DE SALIDA
           </button>
         </div>
       </div>
@@ -1068,13 +1069,13 @@
 
       showProcessing("FACTURANDO...");
 
-      await sleep(2000);
+      await sleep(5000);
 
       markApplied();
 
       showProcessing("APLICANDO VALIDACIÓN...");
 
-      await sleep(2000);
+      await sleep(5000);
 
       await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
 
@@ -1605,7 +1606,7 @@
 
       // La función muestra FACTURANDO mientras el Worker completa la orden de forma idempotente.
       const applyPromise = ejecutarCompleteYappyOrder();
-      const minFacturando = sleep(2000);
+      const minFacturando = sleep(5000);
 
       const data = await applyPromise;
       await minFacturando;
@@ -1615,7 +1616,7 @@
       showProcessing("APLICANDO VALIDACIÓN...");
 
       // La función espera a que Janus refleje el pago aplicado por API de facturación.
-      await sleep(2000);
+      await sleep(5000);
 
       await refrescarMinutosSalidaPorGetDataConReintentos("PAGO EXITOSO");
 
