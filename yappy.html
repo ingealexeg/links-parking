@@ -369,6 +369,26 @@
       line-height: 1.4;
     }
 
+    .station-required-box {
+      background: #eef6ff;
+      color: #2c4a66;
+      border: 1px solid #cfe6ff;
+      padding: 24px 18px;
+      border-radius: 12px;
+      font-size: 1rem;
+      line-height: 1.45;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .station-required-icon {
+      color: var(--tas-blue);
+      font-size: 3.5rem;
+      line-height: 1;
+      margin-bottom: 16px;
+      display: block;
+    }
+
     .error-msg {
       color: #dc3545;
       font-weight: 600;
@@ -517,6 +537,13 @@
           <button class="retry-consulta-button" type="button" onclick="comprobarValidacionPendiente()">
             VERIFICAR TIEMPO DE SALIDA
           </button>
+        </div>
+      </div>
+
+      <div id="station-required-view" style="display:none;">
+        <div class="station-required-box">
+          <span class="station-required-icon">ℹ</span>
+          <span id="station-required-message">DEBE REALIZAR LA VALIDACIÓN EN UNA ESTACIÓN DE PAGO</span>
         </div>
       </div>
     </div>
@@ -1292,6 +1319,12 @@
           showSuccess(ticketRealGlobal, data.remaining, "TICKET YA VALIDADO");
           return true;
         }
+
+        if (data.status === "FREE_VALIDATION_STATION_REQUIRED") {
+          ticketRealGlobal = data.realTicket || ticket;
+          showStationValidationRequired(data.message);
+          return true;
+        }
       }
 
       if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
@@ -1554,6 +1587,10 @@
       throw new Error(data.error);
     }
 
+    if (data.status === "FREE_VALIDATION_STATION_REQUIRED") {
+      return data;
+    }
+
     if (data.mode === "JANUS_FREE") {
       const okJanus =
         data.ok === true &&
@@ -1698,7 +1735,12 @@
     try {
       showProcessing("Sincronizando...");
 
-      await ejecutarApplyPayment();
+      const data = await ejecutarApplyPayment();
+
+      if (data.status === "FREE_VALIDATION_STATION_REQUIRED") {
+        showStationValidationRequired(data.message);
+        return;
+      }
 
       markApplied();
 
@@ -1735,6 +1777,11 @@
               );
               return true;
             }
+
+            if (data.status === "FREE_VALIDATION_STATION_REQUIRED") {
+              showStationValidationRequired(data.message);
+              return false;
+            }
           }
 
           if (text.includes("<status>OK</status>") || text.includes("<status>ok</status>")) {
@@ -1767,6 +1814,7 @@
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'none';
+    document.getElementById('station-required-view').style.display = 'none';
     document.getElementById('loading-view').style.display = 'block';
     document.getElementById('loading-view').innerText = msg;
   }
@@ -1779,6 +1827,7 @@
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'none';
+    document.getElementById('station-required-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'block';
     document.getElementById('ticket-final-id').innerText = `ID: ${id}`;
     document.getElementById('mins-qty').innerText = mins;
@@ -1791,6 +1840,7 @@
     document.getElementById('pending-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
+    document.getElementById('station-required-view').style.display = 'none';
     document.getElementById('loading-view').style.display = 'block';
     document.getElementById('loading-view').innerText = "Comprobando validación...";
 
@@ -1802,7 +1852,23 @@
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
+    document.getElementById('station-required-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'block';
+  }
+
+  function showStationValidationRequired(message) {
+    detenerMonitorOrdenYappy();
+    detenerContadorOrdenPendiente();
+    limpiarVistaYappy();
+
+    document.getElementById('header-title').innerText = "VALIDACIÓN EN ESTACIÓN DE PAGO";
+    document.getElementById('loading-view').style.display = 'none';
+    document.getElementById('payment-view').style.display = 'none';
+    document.getElementById('success-view').style.display = 'none';
+    document.getElementById('pending-view').style.display = 'none';
+    document.getElementById('station-required-message').innerText =
+      message || "DEBE REALIZAR LA VALIDACIÓN EN UNA ESTACIÓN DE PAGO";
+    document.getElementById('station-required-view').style.display = 'block';
   }
 
   function showTicketNoEncontrado(msg) {
@@ -1813,6 +1879,7 @@
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'none';
+    document.getElementById('station-required-view').style.display = 'none';
 
     document.getElementById('loading-view').innerHTML = `
       <div class="consulta-ticket-box">
@@ -1835,6 +1902,7 @@
     document.getElementById('payment-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'none';
+    document.getElementById('station-required-view').style.display = 'none';
 
     document.getElementById('loading-view').innerHTML = `
       <div class="consulta-error-box">
@@ -1851,6 +1919,7 @@
     document.getElementById('loading-view').style.display = 'none';
     document.getElementById('success-view').style.display = 'none';
     document.getElementById('pending-view').style.display = 'none';
+    document.getElementById('station-required-view').style.display = 'none';
     document.getElementById('payment-view').style.display = 'block';
     document.getElementById('error-container').innerHTML = `<div class="error-msg">${msg}</div>`;
   }
